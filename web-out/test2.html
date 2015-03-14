@@ -1,0 +1,52 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script>
+  google.setOnLoadCallback(drawHelpCharts);
+
+  function drawHelpCharts() {
+    // Create and populate the data table.
+    var dateData = new google.visualization.DataTable();
+    dateData.addColumn('date', 'Date');
+    dateData.addColumn('number', 'Mass (gm)');
+    dateData.addRows([
+      [new Date(2008, 0, 1), 1],
+      [new Date(2008, 1, 14), 2],
+      [new Date(2008, 9, 14), 12],
+      [new Date(2008, 10, 14), 22],
+      [new Date(2009, 1, 1), 30]]);
+
+    var continuousOptions = {
+      title: 'but now looks like this:',
+      width: 400, height: 240,
+      legend: 'none',
+      pointSize: 5
+    };
+
+    var continuousDateChart = new google.visualization.LineChart(document.getElementById('help_continuous_date_chart'));
+    continuousDateChart.draw(dateData, continuousOptions);
+
+  }
+
+</script>

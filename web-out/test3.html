@@ -1,0 +1,40 @@
+<html>
+<head>
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    <script type="text/javascript">
+      google.load("visualization", "1", {packages:["corechart"]});
+      google.setOnLoadCallback(drawChart);
+      function drawChart() {
+    // Create and populate the data table.
+    var dateData = new google.visualization.DataTable();
+    dateData.addColumn('date', 'Date');
+    dateData.addColumn('number', 'Mass (gm)');
+    dateData.addColumn('number', 'Mass (gm)2');
+    dateData.addRows([
+      [new Date(2008, 0, 1), 1, 4],
+      [new Date(2008, 0, 2), 2, 5],
+      [new Date(2008, 0, 3), 3, 6],
+      [new Date(2008, 0, 4), 4, 7],
+      [new Date(2008, 0, 9), 5, 8],
+      ]);
+
+    var continuousOptions = {
+      title: 'Allans stocks:',
+      width: 1000, height: 600,
+      legend: 'AAPL',
+      curveType: 'function',
+      pointSize: 2
+    };
+
+    var continuousDateChart = new google.visualization.LineChart(document.getElementById('chart_div'));
+    continuousDateChart.draw(dateData, continuousOptions);
+
+  }
+
+
+    </script>
+</head>
+<body>
+<div id="chart_div"></div>
+</body>
+</html>
