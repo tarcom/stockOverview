@@ -1,0 +1,9 @@
+inspiration:
+
+http://bl.ocks.org/mbostock/1667367
+
+http://blog.scottlogic.com/2014/09/26/an-interactive-stock-comparison-chart-with-d3.html
+
+http://techanjs.org/
+http://bl.ocks.org/andredumas/edf630690c10b89be390
+

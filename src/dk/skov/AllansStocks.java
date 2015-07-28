@@ -29,7 +29,7 @@ public class AllansStocks {
 
         HtmlChartGenerator htmlChartGenerator = new HtmlChartGenerator();
         StringBuffer sb = htmlChartGenerator.doGenerate(stocks, true);
-        //sb.append(htmlChartGenerator.doGenerate(stocks, false));
+        sb.append(htmlChartGenerator.doGenerate(stocks, false));
         htmlChartGenerator.doWriteFile("googleGraph.html", sb);
         System.out.println("bye");
 

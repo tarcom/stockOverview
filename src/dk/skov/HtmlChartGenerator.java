@@ -21,7 +21,8 @@ public class HtmlChartGenerator {
         writer.println(
                 "</head>\n" +
                         "<body>\n" +
-                        "<div id=\"chart_div\"></div>\n" +
+                        "<div id=\"chart_divIndex100based\"></div>\n" +
+                        "<div id=\"chart_divNotIndex100based\"></div>\n" +
                         "</body>\n" +
                         "</html>");
 
@@ -29,6 +30,17 @@ public class HtmlChartGenerator {
     }
 
     public StringBuffer doGenerate(ArrayList<StockWrapper> stocks, boolean index100based) throws Exception {
+
+        String chartName;
+        String chartDiv;
+        if (index100based) {
+            chartName = "continuousDateChartIndex100based";
+            chartDiv = "chart_divIndex100based";
+        } else {
+            chartName = "continuousDateChartNotIndex100based";
+            chartDiv = "chart_divNotIndex100based";
+        }
+
         StringBuffer sb = new StringBuffer();
         sb.append("    <script type=\"text/javascript\" src=\"https://www.google.com/jsapi\"></script>\n" +
                 "    <script type=\"text/javascript\">\n" +
@@ -61,7 +73,7 @@ public class HtmlChartGenerator {
                 "\n" +
                 "    var continuousOptions = {\n" +
                 //"      interpolateNulls = true,\n" +
-                "      title: 'Allans stocks',\n" +
+                "      title: 'Allans stocks " + chartName + "',\n" +
                 "      width: 1400, height: 800,\n" +
                 "      legend: 'taadaa',\n" +
                 "      colors: ['red', 'pink', 'green', 'lightgreen', 'yellow', 'lightyellow', 'blue', 'lightblue'],\n" +
@@ -69,8 +81,8 @@ public class HtmlChartGenerator {
                 "      pointSize: 0\n" +
                 "    };\n" +
                 "\n" +
-                "    var continuousDateChart = new google.visualization.LineChart(document.getElementById('chart_div'));\n" +
-                "    continuousDateChart.draw(dateData, continuousOptions);\n" +
+                "    var " + chartName + " = new google.visualization.LineChart(document.getElementById('" + chartDiv + "'));\n" +
+                "    " + chartName + ".draw(dateData, continuousOptions);\n" +
                 "\n" +
                 "  }\n" +
                 "\n" +
