@@ -10,7 +10,7 @@ import java.util.*;
 /**
  * Created by aogj on 04-09-2015.
  */
-public class Test2 {
+public class MomentumInvestmentStrategy {
 
     public static void main(String... args) throws Exception {
         doRun(4);
@@ -158,16 +158,20 @@ public class Test2 {
         stockWrappers.add(new StockWrapper("OJBA.CO"));
 
 
-
         TreeMap<Double, StockWrapper> momentumMap = new TreeMap<Double, StockWrapper>();
-        for (StockWrapper stock : stockWrappers) {
-            if(stock.stock != null) momentumMap.put(stock.getScore(), stock);
+        for (StockWrapper stockWrapper : stockWrappers) {
+            if (stockWrapper.stock != null) momentumMap.put(stockWrapper.getScore(), stockWrapper);
         }
 
         for (StockWrapper stock : momentumMap.values()) {
-
             System.out.println(stock);
         }
+
+        String googleFinanceCopyPasteString = "";
+        for (StockWrapper stock : momentumMap.values()) {
+            googleFinanceCopyPasteString += "CPH:" + stock.stock.getSymbol().replace(".CO", "") + ", ";
+        }
+        System.out.println("googleFinanceCopyPasteString=" + googleFinanceCopyPasteString);
     }
 
 

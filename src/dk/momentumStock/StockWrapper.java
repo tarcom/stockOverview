@@ -63,7 +63,7 @@ public class StockWrapper {
             returnStr += roundStr(stock.getHistory().get(1).getClose().doubleValue(), 2) + ", ";
             returnStr += roundStr(stock.getHistory().get(2).getClose().doubleValue(), 2) + ", ";
             returnStr += roundStr(stock.getHistory().get(3).getClose().doubleValue(), 2) + ", ";
-            returnStr += roundStr(stock.getHistory().get(4).getClose().doubleValue(), 2);
+            returnStr += roundStr(stock.getHistory().get(4).getClose().doubleValue(), 2) + ", ";;
             returnStr += roundStr(stock.getHistory().get(5).getClose().doubleValue(), 2);
 
         } catch (Exception e) {
@@ -82,58 +82,69 @@ public class StockWrapper {
         Double value = 0d;
 
         value = getHistDiffProcent(1, 0);
-        if (value > 0) value = value * 5; else value = value * 15;
+        if (value > 0) value = value * 5;
+        else value = value * 15;
         returnStr += roundStr(value, 1) + ", ";
 
         value = getHistDiffProcent(2, 1);
-        if (value > 0) value = value * 4; else value = value * 12;
+        if (value > 0) value = value * 4;
+        else value = value * 12;
         returnStr += roundStr(value, 1) + ", ";
 
 
         value = getHistDiffProcent(3, 2);
-        if (value > 0) value = value * 3; else value = value * 9;
+        if (value > 0) value = value * 3;
+        else value = value * 9;
         returnStr += roundStr(value, 1) + ", ";
 
 
         value = getHistDiffProcent(4, 3);
-        if (value > 0) value = value * 2; else value = value * 6;
+        if (value > 0) value = value * 2;
+        else value = value * 6;
         returnStr += roundStr(value, 1) + ", ";
 
 
         value = getHistDiffProcent(5, 4);
-        if (value > 0) value = value * 1; else value = value * 3;
+        if (value > 0) value = value * 1;
+        else value = value * 3;
         returnStr += roundStr(value, 1) + ", ";
 
         return returnStr;
     }
 
     /**
+     * Currently does not support short stock investment
      * @return allans secrets stock score
      */
-    public Double getScore(){
+    public Double getScore() {
 
         Double score = 0d;
         Double value = 0d;
 
         value = getHistDiffProcent(1, 0);
         //System.out.println("value=" + value);
-        if (value > 0) value = value * 5; else value = value * 15;
+        if (value > 0) value = value * 5;
+        else value = value * 15;
         score += value;
 
         value = getHistDiffProcent(2, 1);
-        if (value > 0) value = value * 4; else value = value * 12;
+        if (value > 0) value = value * 4;
+        else value = value * 12;
         score += value;
 
         value = getHistDiffProcent(3, 2);
-        if (value > 0) value = value * 3; else value = value * 9;
+        if (value > 0) value = value * 3;
+        else value = value * 9;
         score += value;
 
         value = getHistDiffProcent(4, 3);
-        if (value > 0) value = value * 2; else value = value * 6;
+        if (value > 0) value = value * 2;
+        else value = value * 6;
         score += value;
 
         value = getHistDiffProcent(5, 4);
-        if (value > 0) value = value * 1; else value = value * 3;
+        if (value > 0) value = value * 1;
+        else value = value * 3;
         score += value;
 
         return score;
