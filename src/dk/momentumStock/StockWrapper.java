@@ -46,7 +46,15 @@ public class StockWrapper {
         if (stock == null) return null;
 
         try {
-            Double histDiffProcent = ((stock.getHistory().get(endDay).getClose().doubleValue() / stock.getHistory().get(startDay).getClose().doubleValue()) - 1) * 100;
+            Double endDayClose;
+            if (endDay == -1) {
+                endDayClose = stock.getQuote().getPrice().doubleValue();
+            } else {
+                endDayClose = stock.getHistory().get(endDay).getClose().doubleValue();
+            }
+
+
+            Double histDiffProcent = ((endDayClose / stock.getHistory().get(startDay).getClose().doubleValue()) - 1) * 100;
             return histDiffProcent;
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -59,6 +67,8 @@ public class StockWrapper {
 
         String returnStr = "close: ";
         try {
+
+            returnStr += roundStr(stock.getQuote().getPrice().doubleValue(), 2) + ", ";
             returnStr += roundStr(stock.getHistory().get(0).getClose().doubleValue(), 2) + ", ";
             returnStr += roundStr(stock.getHistory().get(1).getClose().doubleValue(), 2) + ", ";
             returnStr += roundStr(stock.getHistory().get(2).getClose().doubleValue(), 2) + ", ";
@@ -72,6 +82,7 @@ public class StockWrapper {
         }
 
         returnStr += " --- Pct: ";
+        returnStr += roundStr(getHistDiffProcent(0, -1), 2) + "%, ";
         returnStr += roundStr(getHistDiffProcent(1, 0), 2) + "%, ";
         returnStr += roundStr(getHistDiffProcent(2, 1), 2) + "%, ";
         returnStr += roundStr(getHistDiffProcent(3, 2), 2) + "%, ";
@@ -80,6 +91,12 @@ public class StockWrapper {
 
         returnStr += " --- Weight: ";
         Double value = 0d;
+
+        value = getHistDiffProcent(0, -1);
+        if (value > 0) value = value * 6;
+        else value = value * 18;
+        returnStr += roundStr(value, 1) + ", ";
+
 
         value = getHistDiffProcent(1, 0);
         if (value > 0) value = value * 5;
@@ -120,6 +137,13 @@ public class StockWrapper {
 
         Double score = 0d;
         Double value = 0d;
+
+
+        value = getHistDiffProcent(0, -1);
+        //System.out.println("value=" + value);
+        if (value > 0) value = value * 6;
+        else value = value * 18;
+        score += value;
 
         value = getHistDiffProcent(1, 0);
         //System.out.println("value=" + value);
