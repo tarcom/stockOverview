@@ -10,10 +10,10 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
 
-        doRun(20, true, false, 20, 2, 4);
+        doRun(true, false, 10, 2, 3);
     }
 
-    private static void doRun(int daysHistory, boolean usePersistedFile, boolean useTestStock, int daysBack, double weightFactorPlus, double weightFactorMnius) throws Exception {
+    private static void doRun(boolean usePersistedFile, boolean useTestStock, int daysHistory, double weightFactorPlus, double weightFactorMnius) throws Exception {
 
         List<StockWrapper> stocks;
         if (usePersistedFile) {
@@ -27,7 +27,7 @@ public class Main {
             stocks.add(TestStock.getTestStock());
         }
 
-        SortedMap<Double, StockWrapper> scoreMap = new AllansStrategy().getScores(daysBack, weightFactorPlus, weightFactorMnius, stocks);
+        SortedMap<Double, StockWrapper> scoreMap = new AllansStrategy().getScores(daysHistory, weightFactorPlus, weightFactorMnius, stocks);
 
 
         for (Double score : scoreMap.keySet()) {
