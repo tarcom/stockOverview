@@ -10,21 +10,24 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
 
-        doRun(20);
+        doRun(20, true, false, 20, 2, 4);
     }
 
+    private static void doRun(int daysHistory, boolean usePersistedFile, boolean useTestStock, int daysBack, double weightFactorPlus, double weightFactorMnius) throws Exception {
 
-    private static void doRun(int daysHistory) throws Exception {
+        List<StockWrapper> stocks;
+        if (usePersistedFile) {
+            stocks = PortefolioPersister.load("PersistedStocks.bin");
+        } else {
+            stocks = YahooStockFetcher.getStockPortefolio(daysHistory);
+            PortefolioPersister.persist(stocks, "PersistedStocks.bin");
+        }
 
-        //List<StockWrapper> stocks = YahooStockFetcher.getStockPortefolio(daysHistory);
-        //PortefolioPersister.persist(stocks, "PersistedStocks.bin");
+        if (useTestStock) {
+            stocks.add(TestStock.getTestStock());
+        }
 
-        List<StockWrapper> stocks = PortefolioPersister.load("PersistedStocks.bin");
-
-
-        //stocks.add(TestStock.getTestStock());
-
-        SortedMap<Double, StockWrapper> scoreMap = new AllansStrategy().getScores(20, 1, 1, stocks);
+        SortedMap<Double, StockWrapper> scoreMap = new AllansStrategy().getScores(daysBack, weightFactorPlus, weightFactorMnius, stocks);
 
 
         for (Double score : scoreMap.keySet()) {
