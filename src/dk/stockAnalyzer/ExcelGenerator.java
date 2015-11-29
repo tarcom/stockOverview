@@ -1,0 +1,102 @@
+package dk.stockAnalyzer;
+
+import yahoofinance.Stock;
+import yahoofinance.YahooFinance;
+import yahoofinance.histquotes.HistoricalQuote;
+
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
+import java.text.SimpleDateFormat;
+import java.util.SortedMap;
+
+/**
+ * Created by aogj on 29-11-2015.
+ */
+public class ExcelGenerator {
+
+    public static SimpleDateFormat sdf = new SimpleDateFormat("d-MMM-YY");
+
+    public static void main(String[] args) throws Exception {
+        //test();
+    }
+
+    static void test(SortedMap<Double, StockWrapper> sortedMap) throws Exception {
+
+        if (sortedMap.size() == 0) {
+            System.out.println("sorted map empty!!");
+            return;
+        }
+
+
+        int numberOfDates = sortedMap.get(sortedMap.firstKey()).getHistoricalValues().size();
+        int numberOfStocks = sortedMap.size();
+        String[][] matrix = new String[numberOfStocks + 1][numberOfDates + 3];
+
+
+
+
+        //insert first history days
+        int y = 0;
+        int x = 0;
+        matrix[x][y++] = "score:";
+        matrix[x][y++] = "symbol:";
+        matrix[x][y++] = "daysHist/name:";
+        for (int day : sortedMap.get(sortedMap.firstKey()).getHistoricalValues().keySet()) {
+            matrix[x][y++] = String.valueOf(day);
+        }
+
+
+
+
+        //generate the matrix
+
+        x = 1;
+        for (double score : sortedMap.keySet()) {
+            y = 0;
+            StockWrapper stockWrapper = sortedMap.get(score);
+
+            matrix[x][y++] = String.valueOf(score);
+            matrix[x][y++] = stockWrapper.getSymbol();
+            matrix[x][y++] = stockWrapper.getName();
+
+            for (Double d : stockWrapper.getHistoricalValues().values()) {
+                //matrix[x][y++] = String.valueOf(d);
+                double base100index = calculateBase100Index(d, stockWrapper.getHistoricalValues().get(stockWrapper.getHistoricalValues().size()-1));
+                matrix[x][y++] = String.valueOf(base100index);
+            }
+
+            x++;
+        }
+
+
+
+
+        // Write the matrix to file...
+
+        String filename = "C:\\Projects\\stockOverview\\excelGenerator.csv";
+        PrintWriter writer = new PrintWriter(new FileOutputStream(filename));
+        for (y = 0; y < numberOfDates + 3; y++) {
+
+            String line = "";
+            for (x = 0 ; x < numberOfStocks + 1 ; x++) {
+
+                line += matrix[x][y] + ";";
+
+            }
+
+            if (y != 1) {
+                line = line.replace('.', ',');
+            }
+            writer.println(line);
+            x++;
+        }
+        writer.close();
+        System.out.println("done. writer=" + filename);
+
+    }
+
+    static double calculateBase100Index(double value, double base100) {
+        return (value / base100) * 100;
+    }
+
+}

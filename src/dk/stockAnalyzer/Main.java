@@ -10,7 +10,7 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
 
-        doRun(false, false, 400, 2, 2);
+        doRun(true, false, 10, 2, 2);
     }
 
     private static void doRun(boolean usePersistedFile, boolean useTestStock, int daysHistory, double weightFactorPlus, double weightFactorMnius) throws Exception {
@@ -33,6 +33,8 @@ public class Main {
         for (Double score : scoreMap.keySet()) {
             System.out.println("score: " + score + " - " + scoreMap.get(score).getName() + " stockHistory=" + scoreMap.get(score).getHistoricalValues());
         }
+
+        ExcelGenerator.test(scoreMap);
 
         GoogleStockCopyPasteLinkGenerator.doPrint(scoreMap);
 
