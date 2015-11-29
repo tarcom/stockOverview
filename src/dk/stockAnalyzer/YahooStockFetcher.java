@@ -16,7 +16,7 @@ public class YahooStockFetcher {
 
     private static StockWrapper getStock(String name) {
         Calendar cal = Calendar.getInstance();
-        cal.add(Calendar.DAY_OF_MONTH, -daysHistory - 20);
+        cal.add(Calendar.DAY_OF_MONTH, -daysHistory*2);
         try {
             Stock s = YahooFinance.get(name, cal, Interval.DAILY);
             StockWrapper sw = new StockWrapper(s.getName(), s.getSymbol(), getHistoryMapFromStock(s, daysHistory));
@@ -44,6 +44,9 @@ public class YahooStockFetcher {
         YahooStockFetcher.daysHistory = daysHistory;
 
         List<StockWrapper> stocks = new ArrayList<StockWrapper>();
+
+        //stocks.add(getStock("FING-B.ST"));
+
 
         stocks.add(getStock("ABIGLMV.CO"));
         stocks.add(getStock("ADMCAP-B.CO"));
@@ -379,7 +382,7 @@ public class YahooStockFetcher {
         stocks.add(getStock("TNDR.CO"));
         stocks.add(getStock("TOP.CO"));
         stocks.add(getStock("TOPO.CO"));
-        stocks.add(getStock("TORM-A.CO"));
+        //stocks.add(getStock("TORM-A.CO"));
         stocks.add(getStock("TOTA.CO"));
         stocks.add(getStock("TOWER.CO"));
         stocks.add(getStock("TPSL.CO"));

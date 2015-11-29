@@ -7,3 +7,13 @@ http://blog.scottlogic.com/2014/09/26/an-interactive-stock-comparison-chart-with
 http://techanjs.org/
 http://bl.ocks.org/andredumas/edf630690c10b89be390
 
+
+
+todo:
+export til excel, i stedet for at linke til google, hvor historisk data ikke nødvendigvis er ens.
+  -Så kan man checke med google, og se at der er sammenhæng
+
+Import alle andre aktier...
+  -http://investexcel.net/all-yahoo-finance-stock-tickers/
+
+restful service, jax-rs
