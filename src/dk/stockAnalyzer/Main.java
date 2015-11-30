@@ -2,6 +2,7 @@ package dk.stockAnalyzer;
 
 import java.util.List;
 import java.util.SortedMap;
+import java.util.TreeMap;
 
 /**
  * Created by aogj on 11-09-2015.
@@ -10,7 +11,7 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
 
-        doRun(false, false, 30, 2, 2);
+        doRun(true, false, 50, 2, 2);
     }
 
     private static void doRun(boolean usePersistedFile, boolean useTestStock, int daysHistory, double weightFactorPlus, double weightFactorMnius) throws Exception {
@@ -34,9 +35,20 @@ public class Main {
             System.out.println("score: " + score + " - " + scoreMap.get(score).getName() + " stockHistory=" + scoreMap.get(score).getHistoricalValues());
         }
 
-        ExcelGenerator.test(scoreMap);
-
         GoogleStockCopyPasteLinkGenerator.doPrint(scoreMap);
+
+
+        SortedMap<Double, StockWrapper> top10scorMap = new TreeMap<Double, StockWrapper>();
+        int count = 0;
+        for (Double score : scoreMap.keySet()) {
+            StockWrapper stock = scoreMap.get(score);
+            if (count++ > stocks.size() - 10) {
+                top10scorMap.put(score, stock);
+            }
+        }
+
+        ExcelGenerator.test(top10scorMap);
+
 
     }
 
