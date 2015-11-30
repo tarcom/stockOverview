@@ -1,12 +1,9 @@
 package dk.stockAnalyzer;
 
-import yahoofinance.Stock;
-import yahoofinance.YahooFinance;
-import yahoofinance.histquotes.HistoricalQuote;
-
 import java.io.FileOutputStream;
 import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.SortedMap;
 
 /**
@@ -14,7 +11,7 @@ import java.util.SortedMap;
  */
 public class ExcelGenerator {
 
-    public static SimpleDateFormat sdf = new SimpleDateFormat("d-MMM-YY");
+    public static SimpleDateFormat sdf = new SimpleDateFormat("YYYY-MM-dd");
 
     public static void main(String[] args) throws Exception {
         //test();
@@ -41,8 +38,9 @@ public class ExcelGenerator {
         matrix[x][y++] = "score:";
         matrix[x][y++] = "symbol:";
         matrix[x][y++] = "daysHist/name:";
-        for (int day : sortedMap.get(sortedMap.firstKey()).getHistoricalValues().keySet()) {
-            matrix[x][y++] = String.valueOf(day);
+        for (int day : sortedMap.get(sortedMap.firstKey()).getHistoricalValues2().keySet()) {
+            Calendar cal = sortedMap.get(sortedMap.firstKey()).getHistoricalValues2().get(day);
+            matrix[x][y++] = String.valueOf(sdf.format(cal.getTime()));
         }
 
 
@@ -61,7 +59,7 @@ public class ExcelGenerator {
 
             for (Double d : stockWrapper.getHistoricalValues().values()) {
                 //matrix[x][y++] = String.valueOf(d);
-                double base100index = calculateBase100Index(d, stockWrapper.getHistoricalValues().get(stockWrapper.getHistoricalValues().size()-1));
+                double base100index = calculateBase0Index(d, stockWrapper.getHistoricalValues().get(stockWrapper.getHistoricalValues().size() - 1));
                 matrix[x][y++] = String.valueOf(base100index);
             }
 
@@ -95,8 +93,8 @@ public class ExcelGenerator {
 
     }
 
-    static double calculateBase100Index(double value, double base100) {
-        return (value / base100) * 100;
+    static double calculateBase0Index(double value, double base100) {
+        return ((value / base100) -1 ) * 100;
     }
 
 }
