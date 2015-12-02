@@ -17,3 +17,7 @@ Import alle andre aktier...
   -http://investexcel.net/all-yahoo-finance-stock-tickers/
 
 restful service, jax-rs
+
+sort away if
+-market cap less than 1MIA ?
+-PE is less than 3, and more than 500?

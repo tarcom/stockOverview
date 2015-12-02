@@ -14,10 +14,10 @@ public class ExcelGenerator {
     public static SimpleDateFormat sdf = new SimpleDateFormat("YYYY-MM-dd");
 
     public static void main(String[] args) throws Exception {
-        //test();
+        //doGenerate();
     }
 
-    static void test(SortedMap<Double, StockWrapper> sortedMap) throws Exception {
+    static void doGenerate(SortedMap<Double, StockWrapper> sortedMap) throws Exception {
 
         if (sortedMap.size() == 0) {
             System.out.println("sorted map empty!!");
@@ -36,8 +36,8 @@ public class ExcelGenerator {
         int y = 0;
         int x = 0;
         matrix[x][y++] = "score:";
+        matrix[x][y++] = "name:";
         matrix[x][y++] = "symbol:";
-        matrix[x][y++] = "daysHist/name:";
         for (int day : sortedMap.get(sortedMap.firstKey()).getHistoricalValues2().keySet()) {
             Calendar cal = sortedMap.get(sortedMap.firstKey()).getHistoricalValues2().get(day);
             matrix[x][y++] = String.valueOf(sdf.format(cal.getTime()));
@@ -54,8 +54,8 @@ public class ExcelGenerator {
             StockWrapper stockWrapper = sortedMap.get(score);
 
             matrix[x][y++] = String.valueOf(score);
-            matrix[x][y++] = stockWrapper.getSymbol();
             matrix[x][y++] = stockWrapper.getName();
+            matrix[x][y++] = stockWrapper.getSymbol();
 
             for (Double d : stockWrapper.getHistoricalValues().values()) {
                 //matrix[x][y++] = String.valueOf(d);

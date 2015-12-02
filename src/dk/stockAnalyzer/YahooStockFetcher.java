@@ -6,6 +6,7 @@ import yahoofinance.histquotes.Interval;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.math.BigDecimal;
 import java.util.*;
 
 /**
@@ -21,7 +22,7 @@ public class YahooStockFetcher {
         cal.add(Calendar.DAY_OF_MONTH, -daysHistory*2);
         try {
             Stock s = YahooFinance.get(name, cal, Interval.DAILY);
-            StockWrapper sw = new StockWrapper(s.getName(), s.getSymbol(), getHistoryMapFromStock(s, daysHistory), getHistoryMapFromStock2(s, daysHistory));
+            StockWrapper sw = new StockWrapper(s.getName(), s.getSymbol(), getHistoryMapFromStock(s, daysHistory), getHistoryMapFromStock2(s, daysHistory), s.getStats().getMarketCap());
             return sw;
         } catch (Exception e) {
             System.out.println("Exception getting stock: " + name);
@@ -58,18 +59,17 @@ public class YahooStockFetcher {
 
         List<StockWrapper> stocks = new ArrayList<StockWrapper>();
 
-
-
-
-
         try {
-
             BufferedReader br = new BufferedReader(new FileReader("C:\\projects\\stockOverview\\doc\\allYahooStocks.txt"));
             String line = br.readLine();
 
+            int i = 0;
             while (line != null) {
                 line = br.readLine();
                 stocks.add(getStock(line));
+                if (i++ > 1000) {
+                    //break;
+                }
             }
 
             br.close();

@@ -1,9 +1,6 @@
 package dk.stockAnalyzer;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.util.List;
 import java.util.Map;
 
@@ -24,15 +21,24 @@ public class PortefolioPersister {
 
     }
 
-    public static List<StockWrapper> load(String filename) throws Exception {
-        FileInputStream fis = new FileInputStream(filename);
-        ObjectInputStream ois = new ObjectInputStream(fis);
-        List<StockWrapper> stocks = (List<StockWrapper>) ois.readObject();
-        ois.close();
+    public static List<StockWrapper> load(String filename) {
+        try {
+            System.out.println("loading file " + filename + "...");
+            FileInputStream fis = null;
+            fis = new FileInputStream(filename);
+            ObjectInputStream ois = new ObjectInputStream(fis);
+            List<StockWrapper> stocks = (List<StockWrapper>) ois.readObject();
+            ois.close();
 
-        System.out.println("loaded stocks from file " + filename);
+            System.out.println("loaded stocks from file " + filename);
 
-        return stocks;
+            return stocks;
+
+        } catch (Exception e) {
+            System.out.println("cannot load persisted portefolio from disk! filename=" + filename + ". " + e);
+        }
+        System.exit(0);
+        return null;
     }
 
 }

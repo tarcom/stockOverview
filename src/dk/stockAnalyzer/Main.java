@@ -10,8 +10,9 @@ import java.util.TreeMap;
 public class Main {
 
     public static void main(String[] args) throws Exception {
-
-        doRun(false, false, 50, 2, 2);
+        System.out.println("Welcome!");
+        doRun(false, false, 200, 2, 2);
+        System.out.println("Bye!");
     }
 
     private static void doRun(boolean usePersistedFile, boolean useTestStock, int daysHistory, double weightFactorPlus, double weightFactorMnius) throws Exception {
@@ -24,6 +25,10 @@ public class Main {
             PortefolioPersister.persist(stocks, "PersistedStocks.bin");
         }
 
+
+        stocks = StockFilterHelper.removeUnwantedStocks(stocks);
+
+
         if (useTestStock) {
             stocks.add(TestStock.getTestStock());
         }
@@ -35,19 +40,19 @@ public class Main {
             System.out.println("score: " + score + " - " + scoreMap.get(score).getName() + " stockHistory=" + scoreMap.get(score).getHistoricalValues());
         }
 
-        GoogleStockCopyPasteLinkGenerator.doPrint(scoreMap);
+        //GoogleStockCopyPasteLinkGenerator.doPrint(scoreMap);
 
 
         SortedMap<Double, StockWrapper> top10scorMap = new TreeMap<Double, StockWrapper>();
         int count = 0;
         for (Double score : scoreMap.keySet()) {
             StockWrapper stock = scoreMap.get(score);
-            if (count++ > stocks.size() - 10) {
+            if (count++ > scoreMap.size() - 10) {
                 top10scorMap.put(score, stock);
             }
         }
 
-        ExcelGenerator.test(top10scorMap);
+        ExcelGenerator.doGenerate(top10scorMap);
 
 
     }

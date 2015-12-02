@@ -9,17 +9,28 @@ import java.util.*;
  */
 public class AllansStrategy {
 
-    private static boolean printDebug = true;
+    private static boolean printDebug = false;
 
     public SortedMap<Double, StockWrapper> getScores(int daysBack, double weightFactorPlus, double weightFactorMnius, List<StockWrapper> stocks) {
         Random rand = new Random();
         SortedMap<Double, StockWrapper> sortedStocks = new TreeMap<Double, StockWrapper>();
         for (StockWrapper stock : stocks) {
+            if (stock.getSymbol().equals("AMCO")) {
+                String s = "";
+                s += "asd";
+            }
             double score = getScore(daysBack, weightFactorPlus, weightFactorMnius, stock.getHistoricalValues());
-            double smallRandom = rand.nextDouble() / 1000000;
-            score += smallRandom;
-            sortedStocks.put(score, stock);
+            if (score == -111) {
+                System.out.println("removing stock from portefolio as it exceeds +/- 100& in one day, or exactly 0! stock=" + stock.getName() + " - " + stock.getSymbol());
+            } else {
+                double smallRandom = rand.nextDouble() / 1000000;
+                score += smallRandom;
+                sortedStocks.put(score, stock);
+            }
         }
+
+        System.out.println("getScore, input map size=" + stocks.size() + ", output score map size=" + sortedStocks.size());
+
         return sortedStocks;
     }
 
@@ -37,6 +48,18 @@ public class AllansStrategy {
             }
 
             double histDiffPct = ((historicalValues.get(i) / historicalValues.get(i + 1)) - 1) * 100;
+
+            if (histDiffPct > 100) {
+                System.out.println("share exceeded 100% in one day! histDiffPct=" + histDiffPct);
+                return -111;
+            } else if (histDiffPct < -100) {
+                System.out.println("share exceeded -100% in one day! histDiffPct=" + histDiffPct);
+                return -111;
+            } else if (histDiffPct == 0) {
+                System.out.println("share diff is exactly zero (0) in one day! histDiffPct=" + histDiffPct);
+                return -111;
+            }
+
             if (histDiffPct > 0) {
                 //plus
                 double value = histDiffPct * currentWeightFactorPlus;

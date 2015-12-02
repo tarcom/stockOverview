@@ -1,6 +1,9 @@
 package dk.stockAnalyzer;
 
+import yahoofinance.Stock;
+
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.util.Calendar;
 import java.util.HashMap;
 
@@ -9,12 +12,15 @@ import java.util.HashMap;
  */
 public class StockWrapper implements Serializable {
 
-    String name;
-    String symbol;
-    HashMap<Integer, Double> historicalValues;
-    HashMap<Integer, Calendar> historicalValues2;
+    private BigDecimal marketCap;
 
-    public StockWrapper(String name, String symbol, HashMap<Integer, Double> historicalValues, HashMap<Integer, Calendar> historicalValues2) {
+    private String name;
+    private String symbol;
+    private HashMap<Integer, Double> historicalValues;
+    private HashMap<Integer, Calendar> historicalValues2;
+
+    public StockWrapper(String name, String symbol, HashMap<Integer, Double> historicalValues, HashMap<Integer, Calendar> historicalValues2, BigDecimal marketCap) {
+        this.marketCap = marketCap;
         this.name = name;
         this.symbol = symbol;
         this.historicalValues = historicalValues;
@@ -51,5 +57,13 @@ public class StockWrapper implements Serializable {
 
     public void setHistoricalValues2(HashMap<Integer, Calendar> historicalValues2) {
         this.historicalValues2 = historicalValues2;
+    }
+
+    public BigDecimal getMarketCap() {
+        return marketCap;
+    }
+
+    public void setMarketCap(BigDecimal marketCap) {
+        this.marketCap = marketCap;
     }
 }

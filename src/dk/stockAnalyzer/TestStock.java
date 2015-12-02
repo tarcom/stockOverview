@@ -34,7 +34,7 @@ public class TestStock {
         hm.put(21, 83d);
         hm.put(22, 89d);
 
-        return new StockWrapper("test", "TEST", hm, null);
+        return new StockWrapper("doGenerate", "TEST", hm, null, null);
 
     }
 }
