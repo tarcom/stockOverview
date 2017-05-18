@@ -1,7 +1,7 @@
 <component name="libraryTable">
   <library name="YahooFinanceAPI-2.0.0">
     <CLASSES>
-      <root url="jar://$PROJECT_DIR$/lib/YahooFinanceAPI-2.0.0.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/YahooFinanceAPI-3.6.1.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES />

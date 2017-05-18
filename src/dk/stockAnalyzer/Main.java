@@ -40,7 +40,7 @@ public class Main {
             System.out.println("score: " + score + " - " + scoreMap.get(score).getName() + " stockHistory=" + scoreMap.get(score).getHistoricalValues());
         }
 
-        //GoogleStockCopyPasteLinkGenerator.doPrint(scoreMap);
+        GoogleStockCopyPasteLinkGenerator.doPrint(scoreMap);
 
 
         SortedMap<Double, StockWrapper> top10scorMap = new TreeMap<Double, StockWrapper>();
