@@ -1,0 +1,9 @@
+# Maven build output
+target/
+
+# Compiled output (gammel IntelliJ out-mappe)
+out/
+
+# Runtime output fra screeneren
+output/
+*.bin

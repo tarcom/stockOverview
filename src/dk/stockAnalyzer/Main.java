@@ -19,10 +19,10 @@ public class Main {
 
         List<StockWrapper> stocks;
         if (usePersistedFile) {
-            stocks = PortefolioPersister.load("PersistedStocks.bin");
+            stocks = PortefolioPersister.load("output/PersistedStocks.bin");
         } else {
             stocks = YahooStockFetcher.getStockPortefolio(daysHistory);
-            PortefolioPersister.persist(stocks, "PersistedStocks.bin");
+            PortefolioPersister.persist(stocks, "output/PersistedStocks.bin");
         }
 
 

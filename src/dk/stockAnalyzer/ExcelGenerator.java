@@ -1,5 +1,6 @@
 package dk.stockAnalyzer;
 
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
@@ -11,7 +12,7 @@ import java.util.SortedMap;
  */
 public class ExcelGenerator {
 
-    public static SimpleDateFormat sdf = new SimpleDateFormat("YYYY-MM-dd");
+    public static SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 
     public static void main(String[] args) throws Exception {
         //doGenerate();
@@ -71,7 +72,8 @@ public class ExcelGenerator {
 
         // Write the matrix to file...
 
-        String filename = "C:\\Projects\\stockOverview\\excelGenerator.csv";
+        new File("output").mkdirs();
+        String filename = "output" + File.separator + "stockScreener.csv";
         PrintWriter writer = new PrintWriter(new FileOutputStream(filename));
         for (y = 0; y < numberOfDates + 3; y++) {
 

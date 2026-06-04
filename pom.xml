@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>dk.stockAnalyzer</groupId>
+    <artifactId>stockoverview</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <maven.compiler.release>17</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <mainClass>dk.stockAnalyzer.Main</mainClass>
+    </properties>
+
+    <dependencies>
+        <!-- Yahoo Finance API. 3.17.0 (feb 2022) er nyere end lib/YahooFinanceAPI-3.6.1.jar
+             og håndterer crumb/cookie bedre. Falder den i compile, prøv 3.15.0. -->
+        <dependency>
+            <groupId>com.yahoofinance-api</groupId>
+            <artifactId>YahooFinanceAPI</artifactId>
+            <version>3.17.0</version>
+        </dependency>
+
+        <!-- JSON-parsing af Yahoo v8/chart + v7/quote i YahooClient.
+             (Også transitiv via yahoofinance-api, men deklareret eksplicit for robusthed.) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.18.2</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Projektet bruger ikke standard Maven-layout; kilden ligger i src/ -->
+        <sourceDirectory>src</sourceDirectory>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <!-- Kun den aktive kode kompileres. dk/skov, dk/momentumStock og
+                         dk/techan er gammel/ubrugt kode (se CLAUDE.md) og holdes ude. -->
+                    <includes>
+                        <include>dk/stockAnalyzer/**</include>
+                    </includes>
+                </configuration>
+            </plugin>
+
+            <!-- Kør med:  mvn exec:java  -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <mainClass>${mainClass}</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

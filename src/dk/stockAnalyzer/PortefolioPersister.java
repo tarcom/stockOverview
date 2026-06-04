@@ -12,6 +12,10 @@ public class PortefolioPersister {
 
     public static void persist(List<StockWrapper> stocks, String filename) throws Exception {
 
+        File parent = new File(filename).getParentFile();
+        if (parent != null) {
+            parent.mkdirs();
+        }
         FileOutputStream fos = new FileOutputStream(filename);
         ObjectOutputStream oos = new ObjectOutputStream(fos);
         oos.writeObject(stocks);

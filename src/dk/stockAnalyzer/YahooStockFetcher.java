@@ -1,10 +1,7 @@
 package dk.stockAnalyzer;
 
-import yahoofinance.Stock;
-import yahoofinance.YahooFinance;
-import yahoofinance.histquotes.Interval;
-
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileReader;
 import java.math.BigDecimal;
 import java.util.*;
@@ -18,37 +15,52 @@ public class YahooStockFetcher {
 
 
     private static StockWrapper getStock(String name) {
-        Calendar cal = Calendar.getInstance();
-        cal.add(Calendar.DAY_OF_MONTH, -daysHistory*2);
-        try {
-            Stock s = YahooFinance.get(name, cal, Interval.DAILY);
-            StockWrapper sw = new StockWrapper(s.getName(), s.getSymbol(), getHistoryMapFromStock(s, daysHistory), getHistoryMapFromStock2(s, daysHistory), s.getStats().getMarketCap());
-            return sw;
-        } catch (Exception e) {
-            System.out.println("Exception getting stock: " + name);
-            e.printStackTrace();
+        if (name == null || name.trim().isEmpty()) {
             return null;
         }
-    }
+        name = name.trim();
+        try {
+            // Hent dobbelt så mange kalenderdage som ønskede handelsdage for at have nok punkter.
+            YahooClient.History hist = YahooClient.getHistory(name, daysHistory * 2);
 
+            int needed = daysHistory + 2; // AllansStrategy tilgår index 0..daysHistory
+            if (hist.closes.size() < needed) {
+                System.out.println("Springer over (for lidt historik: " + hist.closes.size()
+                        + "/" + needed + "): " + name);
+                return null;
+            }
 
-    static HashMap<Integer, Double> getHistoryMapFromStock(Stock stock, int daysHistory) throws Exception{
-        HashMap<Integer, Double> historyMap = new HashMap<Integer, Double>();
+            // Byg maps med index 0 = nyeste dag (det AllansStrategy forventer).
+            HashMap<Integer, Double> closeMap = new HashMap<Integer, Double>();
+            HashMap<Integer, Calendar> dateMap = new HashMap<Integer, Calendar>();
+            int newest = hist.closes.size() - 1;
+            for (int i = 0; i < needed; i++) {
+                int src = newest - i;
+                closeMap.put(i, hist.closes.get(src));
+                Calendar cal = Calendar.getInstance();
+                cal.setTimeInMillis(hist.timestamps.get(src) * 1000L);
+                dateMap.put(i, cal);
+            }
 
-        for (int i = 0; i < daysHistory + 2; i++) {
-            historyMap.put(i, stock.getHistory().get(i).getClose().doubleValue());
+            // Navn + market cap er "best effort" — fejler det, beholdes aktien (StockFilterHelper
+            // tåler null marketCap), og symbolet bruges som navn.
+            String displayName = name;
+            BigDecimal marketCap = null;
+            try {
+                YahooClient.Quote q = YahooClient.getQuote(name);
+                if (q.name != null) {
+                    displayName = q.name;
+                }
+                marketCap = q.marketCap;
+            } catch (Exception e) {
+                System.out.println("Kunne ikke hente navn/marketCap for " + name + ": " + e);
+            }
+
+            return new StockWrapper(displayName, name, closeMap, dateMap, marketCap);
+        } catch (Exception e) {
+            System.out.println("Exception getting stock: " + name + " -> " + e);
+            return null;
         }
-        return historyMap;
-    }
-
-    static HashMap<Integer, Calendar> getHistoryMapFromStock2(Stock stock, int daysHistory) throws Exception{
-        HashMap<Integer, Calendar> historyMap = new HashMap<Integer, Calendar>();
-
-        for (int i = 0; i < daysHistory + 2; i++) {
-            historyMap.put(i, stock.getHistory().get(i).getDate());
-
-        }
-        return historyMap;
     }
 
 
@@ -60,18 +72,14 @@ public class YahooStockFetcher {
         List<StockWrapper> stocks = new ArrayList<StockWrapper>();
 
         try {
-            BufferedReader br = new BufferedReader(new FileReader("C:\\projects\\stockOverview\\doc\\allYahooStocks.txt"));
-            String line = br.readLine();
-
-            int i = 0;
-            while (line != null) {
-                line = br.readLine();
-                stocks.add(getStock(line));
-                if (i++ > 1000) {
-                    //break;
+            BufferedReader br = new BufferedReader(new FileReader("doc" + File.separator + "allYahooStocks.txt"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                StockWrapper sw = getStock(line);
+                if (sw != null) {
+                    stocks.add(sw);
                 }
             }
-
             br.close();
         } catch (Exception e) {
             System.out.println(e);
