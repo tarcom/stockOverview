@@ -1,10 +1,11 @@
 package dk.stockAnalyzer;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
+import java.io.*;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Created by aogj on 11-09-2015.
@@ -12,7 +13,79 @@ import java.util.*;
 public class YahooStockFetcher {
 
     static int daysHistory;
+    private static final String NOT_FOUND_FILE = "doc" + File.separator + "notFoundStocks.txt";
+    private static Set<String> notFoundSymbols = new HashSet<>();
 
+    private static final AtomicInteger doneCount    = new AtomicInteger(0);
+    private static final AtomicInteger successCount = new AtomicInteger(0);
+    private static final AtomicInteger notFoundCount= new AtomicInteger(0);
+    private static volatile int totalCount = 0;
+    private static volatile long startTime = 0;
+    private static final ConcurrentLinkedQueue<String> retryQueue = new ConcurrentLinkedQueue<>();
+
+    private static synchronized void markNotFound(String symbol) {
+        if (notFoundSymbols.add(symbol)) {
+            notFoundCount.incrementAndGet();
+            try (BufferedWriter w = new BufferedWriter(new FileWriter(NOT_FOUND_FILE, true))) {
+                w.write(symbol);
+                w.newLine();
+            } catch (IOException e) {
+                System.out.println("Kunne ikke skrive til notFoundStocks.txt: " + e.getMessage());
+            }
+        }
+    }
+
+    private static Set<String> loadNotFoundSymbols() {
+        Set<String> set = new HashSet<>();
+        File f = new File(NOT_FOUND_FILE);
+        if (!f.exists()) return set;
+        try (BufferedReader br = new BufferedReader(new FileReader(f))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (!line.isEmpty()) set.add(line);
+            }
+        } catch (IOException e) {
+            System.out.println("Kunne ikke læse notFoundStocks.txt: " + e.getMessage());
+        }
+        return set;
+    }
+
+    private static void printProgress(boolean isFinal) {
+        int done    = doneCount.get();
+        int success = successCount.get();
+        int nf      = notFoundCount.get();
+        int total   = totalCount;
+        long elapsedMs = System.currentTimeMillis() - startTime;
+        long elapsedSec = elapsedMs / 1000;
+
+        double pct = total > 0 ? (done * 100.0 / total) : 0;
+        double perMin = elapsedSec > 0 ? (done * 60.0 / elapsedSec) : 0;
+
+        String eta = "";
+        if (!isFinal && perMin > 0 && done < total) {
+            long etaSec = (long) ((total - done) * 60.0 / perMin);
+            eta = String.format("  ETA: %dh %02dm", etaSec / 3600, (etaSec % 3600) / 60);
+        }
+
+        String elapsed = String.format("%dh %02dm %02ds",
+                elapsedSec / 3600, (elapsedSec % 3600) / 60, elapsedSec % 60);
+
+        if (isFinal) {
+            System.out.println("\n=== KØRSEL AFSLUTTET ===");
+            System.out.printf("Tid:         %s%n", elapsed);
+            System.out.printf("Behandlet:   %d / %d (%.1f%%)%n", done, total, pct);
+            System.out.printf("Hentet OK:   %d%n", success);
+            System.out.printf("Ikke fundet: %d (gemt i notFoundStocks.txt)%n", nf);
+            System.out.printf("Andre fejl:  %d%n", done - success - nf);
+            System.out.printf("Hastighed:   %.0f aktier/min  (endte på %dms/slot)%n",
+                    perMin, YahooClient.currentDelayMs);
+            System.out.println("========================\n");
+        } else {
+            System.out.printf("[%s]  %d/%d (%.1f%%)  %.0f aktier/min  [%dms/slot]%s%n",
+                    elapsed, done, total, pct, perMin, YahooClient.currentDelayMs, eta);
+        }
+    }
 
     private static StockWrapper getStock(String name) {
         if (name == null || name.trim().isEmpty()) {
@@ -20,17 +93,19 @@ public class YahooStockFetcher {
         }
         name = name.trim();
         try {
-            // Hent dobbelt så mange kalenderdage som ønskede handelsdage for at have nok punkter.
             YahooClient.History hist = YahooClient.getHistory(name, daysHistory * 2);
 
-            int needed = daysHistory + 2; // AllansStrategy tilgår index 0..daysHistory
+            int needed = daysHistory + 2;
+            if (hist.closes.size() == 0) {
+                markNotFound(name);
+                return null;
+            }
             if (hist.closes.size() < needed) {
                 System.out.println("Springer over (for lidt historik: " + hist.closes.size()
                         + "/" + needed + "): " + name);
                 return null;
             }
 
-            // Byg maps med index 0 = nyeste dag (det AllansStrategy forventer).
             HashMap<Integer, Double> closeMap = new HashMap<Integer, Double>();
             HashMap<Integer, Calendar> dateMap = new HashMap<Integer, Calendar>();
             int newest = hist.closes.size() - 1;
@@ -42,47 +117,116 @@ public class YahooStockFetcher {
                 dateMap.put(i, cal);
             }
 
-            // Navn + market cap er "best effort" — fejler det, beholdes aktien (StockFilterHelper
-            // tåler null marketCap), og symbolet bruges som navn.
-            String displayName = name;
-            BigDecimal marketCap = null;
-            try {
-                YahooClient.Quote q = YahooClient.getQuote(name);
-                if (q.name != null) {
-                    displayName = q.name;
-                }
-                marketCap = q.marketCap;
-            } catch (Exception e) {
-                System.out.println("Kunne ikke hente navn/marketCap for " + name + ": " + e);
-            }
-
-            return new StockWrapper(displayName, name, closeMap, dateMap, marketCap);
+            successCount.incrementAndGet();
+            return new StockWrapper(name, name, closeMap, dateMap, null);
         } catch (Exception e) {
-            System.out.println("Exception getting stock: " + name + " -> " + e);
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            if (msg.contains("HTTP 404")) {
+                markNotFound(name);
+            } else if (msg.contains("429")) {
+                retryQueue.add(name);
+            } else {
+                System.out.println("Exception getting stock: " + name + " -> " + e);
+            }
             return null;
+        } finally {
+            doneCount.incrementAndGet();
         }
     }
 
 
 
     public static List<StockWrapper> getStockPortefolio(int daysHistory) {
+        return getStockPortefolio(daysHistory, -1);
+    }
+
+    public static List<StockWrapper> getStockPortefolio(int daysHistory, int limit) {
 
         YahooStockFetcher.daysHistory = daysHistory;
+        notFoundSymbols = loadNotFoundSymbols();
+        System.out.println("Springer " + notFoundSymbols.size() + " kendte 404-symboler over.");
 
-        List<StockWrapper> stocks = new ArrayList<StockWrapper>();
-
+        List<String> symbols = new ArrayList<>();
         try {
             BufferedReader br = new BufferedReader(new FileReader("doc" + File.separator + "allYahooStocks.txt"));
             String line;
             while ((line = br.readLine()) != null) {
-                StockWrapper sw = getStock(line);
-                if (sw != null) {
-                    stocks.add(sw);
+                line = line.trim();
+                if (!line.isEmpty() && !notFoundSymbols.contains(line)) {
+                    symbols.add(line);
+                    if (limit > 0 && symbols.size() >= limit) break;
                 }
             }
             br.close();
         } catch (Exception e) {
             System.out.println(e);
+        }
+        System.out.println("Henter " + symbols.size() + " aktier...");
+
+        doneCount.set(0);
+        successCount.set(0);
+        notFoundCount.set(0);
+        retryQueue.clear();
+        totalCount = symbols.size();
+        startTime = System.currentTimeMillis();
+
+        ScheduledExecutorService reporter = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "progress-reporter");
+            t.setDaemon(true);
+            return t;
+        });
+        reporter.scheduleAtFixedRate(() -> printProgress(false), 10, 10, TimeUnit.SECONDS);
+
+        List<StockWrapper> stocks = new ArrayList<>();
+        ExecutorService pool = Executors.newFixedThreadPool(YahooClient.parallelism);
+        List<Future<StockWrapper>> futures = new ArrayList<>();
+        for (String symbol : symbols) {
+            futures.add(pool.submit(() -> getStock(symbol)));
+        }
+        pool.shutdown();
+        for (Future<StockWrapper> f : futures) {
+            try {
+                StockWrapper sw = f.get();
+                if (sw != null) stocks.add(sw);
+            } catch (Exception e) {
+                System.out.println("Trådfejl: " + e.getMessage());
+            }
+        }
+
+        reporter.shutdownNow();
+        printProgress(true);
+
+        // Retry-loop: genforsøg 429-fejlede aktier (maks 3 runder)
+        for (int round = 1; round <= 3 && !retryQueue.isEmpty(); round++) {
+            List<String> toRetry = new ArrayList<>(retryQueue);
+            retryQueue.clear();
+            System.out.printf("Genforsøger %d aktier (runde %d, delay=%dms)...%n",
+                    toRetry.size(), round, YahooClient.currentDelayMs);
+            ExecutorService retryPool = Executors.newFixedThreadPool(YahooClient.parallelism);
+            List<Future<StockWrapper>> retryFutures = new ArrayList<>();
+            for (String sym : toRetry) retryFutures.add(retryPool.submit(() -> getStock(sym)));
+            retryPool.shutdown();
+            for (Future<StockWrapper> f : retryFutures) {
+                try { StockWrapper sw = f.get(); if (sw != null) stocks.add(sw); }
+                catch (Exception e) { System.out.println("Retry-trådfejl: " + e.getMessage()); }
+            }
+        }
+
+        // Batch-hent navn + market cap for alle succesfulde aktier (100 ad gangen)
+        System.out.println("Henter navn/market cap i batch...");
+        List<String> successSymbols = new ArrayList<>();
+        for (StockWrapper sw : stocks) successSymbols.add(sw.getSymbol());
+        try {
+            Map<String, YahooClient.Quote> quotes = YahooClient.getQuoteBatch(successSymbols);
+            for (StockWrapper sw : stocks) {
+                YahooClient.Quote q = quotes.get(sw.getSymbol());
+                if (q != null) {
+                    if (q.name != null) sw.setName(q.name);
+                    sw.setMarketCap(q.marketCap);
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Batch-quote fejlede: " + e.getMessage());
         }
 
 

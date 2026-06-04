@@ -22,10 +22,9 @@ public class StockFilterHelper {
             try {
 
                 BigDecimal marketCap = stock.getMarketCap();
-                //System.out.println("marketcap = " + marketCap);
-                if (marketCap.floatValue() < 1000000l) {
+                if (marketCap != null && marketCap.longValue() < 100_000_000L) {
                     newStockList.remove(stock);
-                    System.out.println("removing stock due to low marketCap. marketcap = " + marketCap + ", stock=" + stock.getName() + " - " + stock.getSymbol());
+                    System.out.println("Fjerner lav market cap: " + marketCap + "  " + stock.getSymbol());
                 }
 
 //                for (int i = 0 ; i < stock.getHistoricalValues().size() ; i++) {

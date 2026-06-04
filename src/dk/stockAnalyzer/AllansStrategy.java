@@ -21,7 +21,9 @@ public class AllansStrategy {
             }
             double score = getScore(daysBack, weightFactorPlus, weightFactorMnius, stock.getHistoricalValues());
             if (score == -111) {
-                System.out.println("removing stock from portefolio as it exceeds +/- 100& in one day, or exactly 0! stock=" + stock.getName() + " - " + stock.getSymbol());
+                System.out.println("removing stock from portefolio as it exceeds +/- 100& in one day! stock=" + stock.getName() + " - " + stock.getSymbol());
+            } else if (score == 0.0) {
+                // frosne priser — alle dage er 0% ændring, ingen signal
             } else {
                 double smallRandom = rand.nextDouble() / 1000000;
                 score += smallRandom;
@@ -54,9 +56,6 @@ public class AllansStrategy {
                 return -111;
             } else if (histDiffPct < -100) {
                 System.out.println("share exceeded -100% in one day! histDiffPct=" + histDiffPct);
-                return -111;
-            } else if (histDiffPct == 0) {
-                System.out.println("share diff is exactly zero (0) in one day! histDiffPct=" + histDiffPct);
                 return -111;
             }
 

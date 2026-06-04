@@ -11,9 +11,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Selvstændig Yahoo Finance-klient til 2026.
@@ -41,9 +40,16 @@ public class YahooClient {
     private static final String CHART_URL  = "https://query1.finance.yahoo.com/v8/finance/chart/";
     private static final String QUOTE_URL  = "https://query1.finance.yahoo.com/v7/finance/quote";
 
-    /** Minimum millisekunder mellem to Yahoo-kald. Sæt til 0 for fuld fart. */
-    public static long rateLimitMs = 1500;
+    /** Antal parallelle tråde. */
+    public static int parallelism = 8;
     private static final int MAX_RETRIES = 3;
+
+    // --- Adaptiv rate limiting (AIMD) ---
+    private static final long MIN_DELAY_MS = 80;
+    private static final long MAX_DELAY_MS = 4000;
+    private static final int  SUCCESSES_BEFORE_SPEEDUP = 15;
+    public  static volatile long currentDelayMs = 120;
+    private static final AtomicInteger consecutiveSuccesses = new AtomicInteger(0);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -136,14 +142,31 @@ public class YahooClient {
         return result;
     }
 
-    // ------------------------------------------- HTTP m. rate limit + backoff
+    // ------------------------------------------- HTTP m. adaptiv rate + backoff
 
     private static synchronized void throttle() {
-        long wait = rateLimitMs - (System.currentTimeMillis() - lastRequestTime);
-        if (wait > 0) {
-            sleep(wait);
-        }
+        long wait = currentDelayMs - (System.currentTimeMillis() - lastRequestTime);
+        if (wait > 0) sleep(wait);
         lastRequestTime = System.currentTimeMillis();
+    }
+
+    private static synchronized void onSuccess() {
+        int s = consecutiveSuccesses.incrementAndGet();
+        if (s >= SUCCESSES_BEFORE_SPEEDUP) {
+            consecutiveSuccesses.set(0);
+            long prev = currentDelayMs;
+            currentDelayMs = Math.max(MIN_DELAY_MS, (long)(currentDelayMs * 0.85));
+            if (currentDelayMs < prev) {
+                System.out.printf("  [rate] ↑ → %dms/slot%n", currentDelayMs);
+            }
+        }
+    }
+
+    private static synchronized void onRateLimitHit() {
+        consecutiveSuccesses.set(0);
+        long prev = currentDelayMs;
+        currentDelayMs = Math.min(MAX_DELAY_MS, currentDelayMs * 2);
+        System.out.printf("  [rate] ↓ 429: %dms → %dms/slot%n", prev, currentDelayMs);
     }
 
     private static JsonNode getJson(String urlStr) throws IOException {
@@ -159,22 +182,22 @@ public class YahooClient {
             int code = conn.getResponseCode();
             if (code == 200) {
                 try (InputStream in = conn.getInputStream()) {
-                    return MAPPER.readTree(in);
+                    JsonNode result = MAPPER.readTree(in);
+                    onSuccess();
+                    return result;
                 } finally {
                     conn.disconnect();
                 }
             }
             conn.disconnect();
             if (code == 429) {
-                long backoff = 2000L * (1L << attempt); // 2s, 4s, 8s, 16s
-                System.out.println("HTTP 429 (rate limited), backoff " + backoff
-                        + "ms (forsøg " + (attempt + 1) + "/" + (MAX_RETRIES + 1) + ")");
+                onRateLimitHit();
+                long backoff = 2000L * (1L << attempt);
                 sleep(backoff);
                 last = new IOException("HTTP 429 for " + urlStr);
                 continue;
             }
             if (code == 401) {
-                // cookie/crumb udløbet — frisk op og prøv igen
                 cookie = null;
                 crumb = null;
                 ensureAuth();
@@ -247,27 +270,35 @@ public class YahooClient {
         public BigDecimal marketCap;
     }
 
-    /** Henter navn + market cap via v7/quote (kræver crumb). Felter kan være null. */
-    public static Quote getQuote(String symbol) throws IOException {
+    /** Henter navn + market cap for op til 100 symboler i ét kald. */
+    public static Map<String, Quote> getQuoteBatch(List<String> symbols) throws IOException {
         ensureAuth();
-        String url = QUOTE_URL + "?symbols=" + URLEncoder.encode(symbol, StandardCharsets.UTF_8)
-                + "&crumb=" + URLEncoder.encode(crumb, StandardCharsets.UTF_8);
-        JsonNode root = getJson(url);
-        JsonNode arr = root.path("quoteResponse").path("result");
-        Quote q = new Quote();
-        if (arr.isArray() && arr.size() > 0) {
-            JsonNode n = arr.get(0);
-            if (n.hasNonNull("longName")) {
-                q.name = n.get("longName").asText();
-            } else if (n.hasNonNull("shortName")) {
-                q.name = n.get("shortName").asText();
-            } else if (n.hasNonNull("displayName")) {
-                q.name = n.get("displayName").asText();
-            }
-            if (n.hasNonNull("marketCap")) {
-                q.marketCap = new BigDecimal(n.get("marketCap").asText());
+        Map<String, Quote> result = new HashMap<>();
+        int batchSize = 100;
+        for (int i = 0; i < symbols.size(); i += batchSize) {
+            List<String> batch = symbols.subList(i, Math.min(i + batchSize, symbols.size()));
+            String symbolsParam = String.join(",", batch);
+            String url = QUOTE_URL + "?symbols=" + URLEncoder.encode(symbolsParam, StandardCharsets.UTF_8)
+                    + "&crumb=" + URLEncoder.encode(crumb, StandardCharsets.UTF_8);
+            try {
+                JsonNode arr = getJson(url).path("quoteResponse").path("result");
+                if (arr.isArray()) {
+                    for (JsonNode n : arr) {
+                        String sym = n.path("symbol").asText(null);
+                        if (sym == null) continue;
+                        Quote q = new Quote();
+                        if (n.hasNonNull("longName"))        q.name = n.get("longName").asText();
+                        else if (n.hasNonNull("shortName"))  q.name = n.get("shortName").asText();
+                        else if (n.hasNonNull("displayName"))q.name = n.get("displayName").asText();
+                        if (n.hasNonNull("marketCap"))
+                            q.marketCap = new BigDecimal(n.get("marketCap").asText());
+                        result.put(sym, q);
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("Batch-quote fejl (ignoreret): " + e.getMessage());
             }
         }
-        return q;
+        return result;
     }
 }

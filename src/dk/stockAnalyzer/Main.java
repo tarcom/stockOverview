@@ -10,18 +10,20 @@ import java.util.TreeMap;
 public class Main {
 
     public static void main(String[] args) throws Exception {
+        boolean usePersistedFile = false;  // true = kør på data fra sidste kørsel (ingen Yahoo-fetch)
+        int limit = 10000000;                   // sæt til -1 for fuld kørsel
         System.out.println("Welcome!");
-        doRun(false, false, 200, 2, 2);
+        doRun(usePersistedFile, false, 200, 2, 2, limit);
         System.out.println("Bye!");
     }
 
-    private static void doRun(boolean usePersistedFile, boolean useTestStock, int daysHistory, double weightFactorPlus, double weightFactorMnius) throws Exception {
+    private static void doRun(boolean usePersistedFile, boolean useTestStock, int daysHistory, double weightFactorPlus, double weightFactorMnius, int limit) throws Exception {
 
         List<StockWrapper> stocks;
         if (usePersistedFile) {
             stocks = PortefolioPersister.load("output/PersistedStocks.bin");
         } else {
-            stocks = YahooStockFetcher.getStockPortefolio(daysHistory);
+            stocks = YahooStockFetcher.getStockPortefolio(daysHistory, limit);
             PortefolioPersister.persist(stocks, "output/PersistedStocks.bin");
         }
 
@@ -35,10 +37,6 @@ public class Main {
 
         SortedMap<Double, StockWrapper> scoreMap = new AllansStrategy().getScores(daysHistory, weightFactorPlus, weightFactorMnius, stocks);
 
-
-        for (Double score : scoreMap.keySet()) {
-            System.out.println("score: " + score + " - " + scoreMap.get(score).getName() + " stockHistory=" + scoreMap.get(score).getHistoricalValues());
-        }
 
         GoogleStockCopyPasteLinkGenerator.doPrint(scoreMap);
 
