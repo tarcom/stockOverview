@@ -21,10 +21,10 @@ public class Main {
 
         List<StockWrapper> stocks;
         if (usePersistedFile) {
-            stocks = PortefolioPersister.load("output/PersistedStocks.bin");
+            stocks = StockDb.load(daysHistory, limit);
         } else {
             stocks = YahooStockFetcher.getStockPortefolio(daysHistory, limit);
-            PortefolioPersister.persist(stocks, "output/PersistedStocks.bin");
+            StockDb.persist(stocks);
         }
 
 

@@ -1,0 +1,5 @@
+# Kopiér til config/db.properties og udfyld. db.properties er gitignored og må ALDRIG committes.
+# Genbruger samme MariaDB + bruger som 'stocks'-projektet (tabeller prefixet stockOverview_).
+db.url=jdbc:mariadb://localhost:3306/stocks
+db.user=stocks
+db.pass=stocks_dev

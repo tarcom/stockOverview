@@ -13,7 +13,7 @@
     <properties>
         <maven.compiler.release>11</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <mainClass>dk.stockAnalyzer.Main</mainClass>
+        <mainClass>dk.stockAnalyzer.Ingest</mainClass>
     </properties>
 
     <dependencies>
@@ -31,6 +31,14 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>2.18.2</version>
+        </dependency>
+
+        <!-- MariaDB JDBC-driver. Kurser persisteres nu i MariaDB (genbruger stocks-DB'en,
+             tabeller prefixet stockOverview_) i stedet for Java-serialisering til .bin. -->
+        <dependency>
+            <groupId>org.mariadb.jdbc</groupId>
+            <artifactId>mariadb-java-client</artifactId>
+            <version>3.5.2</version>
         </dependency>
     </dependencies>
 

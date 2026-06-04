@@ -2,22 +2,71 @@
 
 ## Hvad er dette?
 
-En Java-baseret aktie-screener der henter historiske kursdata fra Yahoo Finance, kører "Allan's Strategy" (momentum-baseret scoring) på alle aktier, og outputter en rangliste samt Excel-export af top-scorerne.
+En Java-baseret aktie-screener. To dele:
 
-Projektet er skrevet i 2015–2017. Status juni 2026: **moderniseret og kørbart** — bygger med Maven og henter live Yahoo-data (valideret end-to-end på NOVO-B/MAERSK-B/DSV). Se "Modernisering (status)" nedenfor for hvad der er gjort, og hvad der udestår.
+1. **Ingestion (primær, `dk.stockAnalyzer.Ingest`)** — henter ALT tilgængeligt data for hver
+   ticker fra Yahoo Finance og lægger det i MariaDB: 10 års daglig OHLCV-historik,
+   udbytter/splits, virksomheds-metadata (sektor/industri/land m.m.) og ~45 fundamentale
+   nøgletal (P/E, P/B, EV/EBITDA, ROE, margins, gæld, vækst, …). Dette er fundamentet
+   man screener oven på.
+2. **Momentum-screener (sekundær, `dk.stockAnalyzer.Main`)** — den oprindelige 2015-kode:
+   "Allan's Strategy" (momentum-scoring) + Excel/links-export. Uændret; kører nu på DB-data.
+
+Projektet er skrevet i 2015–2017, moderniseret 2026 (Maven, live Yahoo-data, crumb/cookie,
+MariaDB-persistens). Validér end-to-end ved at køre `Ingest` med en lille limit.
 
 ---
 
-## Kør-flow
+## Ingestion — `dk.stockAnalyzer.Ingest` (primær path)
+
+```
+allYahooStocks.txt (150k symboler)
+      ↓  (pr. symbol, 8 tråde)
+YahooClient.getDailyHistory   v8/chart  →  10 års OHLCV + adjclose + udbytter/splits
+YahooClient.getQuoteSummary   v10/quoteSummary  →  profil + ~45 nøgletal
+      ↓
+StockDb (UPSERT)  →  stockOverview_{prices,dividends,splits,securities,fundamentals,ingest_log}
+```
+
+**Inkrementel som standard:** for hvert symbol slås `MAX(price_date)` op. Tom → **fuld
+10-års backfill** (`range=10y`). Ellers hentes kun nye dage (`period1 = sidste dato − 4
+dages overlap`). Den første nat-kørsel backfiller alt; efterfølgende daglige kørsler
+henter blot de seneste dage + ét nyt fundamentals-snapshot. `INSERT … ON DUPLICATE KEY
+UPDATE` overalt, så det er idempotent.
+
+**Alle tickers ingestes** uanset historik-længde — 70%-grænsen hører til *screening*, ikke
+ingestion. Symboler der giver HTTP 404 logges som `status='not_found'` i `ingest_log` og
+springes over. Symboler **hentet OK inden for `RESUME_WINDOW_DAYS` (7)** springes også over,
+så en afbrudt nat-backfill genoptages effektivt over flere nætter (kør bare `mvn exec:java`
+igen næste nat — den fortsætter hvor den slap). Den daglige inkrementelle kørsel skal
+derimod opdatere ALLE tickers → kør den med `INGEST_FORCE=1` (ignorerer resume-skip).
+
+**Tidsforbrug:** ~118 symboler/min i korte tests, men en fuld 150k-kørsel rammer Yahoos
+time/døgn-throttling → realistisk **2-3 nætter** (best case ~21t). Kør i `screen`/`nohup`;
+den er resumerbar pr. nat.
+
+**CLI — limit som første arg** (intet/≤0 = alle):
+```bash
+mvn exec:java                          # alle 150k (nat-kørsel)
+mvn exec:java -Dexec.args="200"        # test: kun 200 symboler
+```
+
+Nat-backfill: `Ingest` er default-`mainClass`, så HTPC kan køre `mvn exec:java` over natten.
+
+---
+
+## Momentum-screener (sekundær) — kør-flow
 
 ```
 allYahooStocks.txt
       ↓
 YahooStockFetcher      (henter 200 dages historik via Yahoo Finance API)
       ↓
+StockDb.persist        (UPSERT kurser + symboler → MariaDB, tabeller stockOverview_*)
+      ↓
 StockFilterHelper      (fjerner aktier med market cap < 1.000.000)
       ↓
-AllansStrategy         (scorer alle aktier, momentum-vægtet)
+AllansStrategy         (scorer alle aktier, momentum-vægtet, normaliseret)
       ↓
 GoogleStockCopyPasteLinkGenerator  (printer links til top-aktier)
       ↓
@@ -27,6 +76,18 @@ ExcelGenerator         (CSV med base-100 indekseret historik for top 10)
 Main entry point: `dk.stockAnalyzer.Main`
 
 Default parametre: 200 dages historik, weightFactorPlus=2, weightFactorMinus=2.
+
+`usePersistedFile=true` i `Main` springer Yahoo-fetch over og kører på data fra DB
+(`StockDb.load`) i stedet — nyttigt til at gen-score uden at hamre Yahoo.
+
+### Historik-tærskel (≥70%)
+
+Det fulde vindue er `daysHistory+2` (= 202) handelsdage. Aktier accepteres hvis de
+har mindst **70%** af det (`YahooStockFetcher.MIN_HISTORY_FRACTION`, ≥142 punkter) —
+ikke kun fuld historik. Kortere historik scores over de dage den har, og
+`AllansStrategy` **normaliserer** scoren (gennemsnitlig vægtet dagsbevægelse i stedet
+for sum), så lange og korte historikker er sammenlignelige. `ExcelGenerator`
+dimensionerer efter den længste historik i top-10 og udfylder manglende dage med blank.
 
 ---
 
@@ -47,18 +108,56 @@ Resultatet: aktier der har klaret sig godt **for nylig** scores højere end dem 
 
 ```bash
 mvn compile                                   # bygger (kun dk/stockAnalyzer/** kompileres)
-mvn exec:java                                 # kører dk.stockAnalyzer.Main
-mvn exec:java -DmainClass=<anden.Main.Class>  # kør en anden klasse
+mvn exec:java                                 # kører default-mainClass = dk.stockAnalyzer.Ingest (alle)
+mvn exec:java -Dexec.args="200"               # Ingest med limit
+mvn exec:java -Dexec.mainClass=dk.stockAnalyzer.Main   # kør momentum-screeneren i stedet
 ```
 
-Kræver **JDK 17+** (kompileres med `maven.compiler.release=17`). GitHub Codespaces har en JDK forudinstalleret. Output (CSV + `.bin`) lander i `output/`.
+Kræver **JDK 17+** (kompileres med `maven.compiler.release=17`). CSV-output (momentum) lander i `output/`; alt kursdata + fundamentals persisteres i MariaDB (se nedenfor).
+
+## Datapersistens — MariaDB (vigtigt)
+
+Al data gemmes i MariaDB via `dk.stockAnalyzer.StockDb` (JDBC, MariaDB-driver). Den gamle
+Java-serialisering til `.bin` (`PortefolioPersister`) er **fjernet**. Vi genbruger
+`stocks`-projektets MariaDB på HTPC; tabeller er prefixet `stockOverview_`. `StockDb`
+opretter dem selv (`CREATE TABLE IF NOT EXISTS`); alt bruger `ON DUPLICATE KEY UPDATE`.
+
+| Tabel | Indhold |
+|---|---|
+| `stockOverview_securities` | symbol (PK), name, exchange, currency, quote_type, **sector, industry, country**, employees, website, business_summary, first_seen, last_updated |
+| `stockOverview_prices` | symbol, price_date, open, high, low, close, **adj_close**, volume — PK(symbol, price_date) |
+| `stockOverview_dividends` | symbol, ex_date, amount |
+| `stockOverview_splits` | symbol, split_date, numerator, denominator |
+| `stockOverview_fundamentals` | symbol, snapshot_date, **~45 nøgletal-kolonner** (trailing/forward PE, P/B, EV/EBITDA, ROE, ROA, margins, debt_to_equity, current/quick ratio, growth, dividend_yield, beta, 52w, analyst-targets …) + `raw_json` (hele quoteSummary). PK(symbol, snapshot_date) → tidsserie |
+| `stockOverview_ingest_log` | symbol (PK), last_price_date, last_fundamentals_date, price_points, status, error — resumerbarhed + skip af `not_found` |
+| `stockOverview_symbols` | **gammel** momentum-tabel (symbol, name, market_cap); bevares til `Main`/`StockDb.persist` |
+
+`fundamentals` er bred + rå JSON: de vigtigste felter som søgbare kolonner
+(`WHERE trailing_pe < 15 AND return_on_equity > 0.15`), plus hele quoteSummary-svaret i
+`raw_json` så intet går tabt og flere felter kan udtrækkes senere uden re-scrape.
+
+**Credentials:** `config/db.properties` (gitignored — se `config/db.properties.example`),
+samme bruger/password som `stocks`-projektet. Override via env
+`STOCKOVERVIEW_DB_URL` / `_USER` / `_PASS`.
+
+### Remote-adgang (MySQL Workbench fra Windows)
+
+MariaDB på HTPC er åbnet på LAN (juni 2026): `bind-address = 0.0.0.0`
+(`/etc/mysql/mariadb.conf.d/50-server.cnf`, backup `.bak.*` ved siden af), ufw tillader
+3306 kun fra `192.168.1.0/24`, og brugeren `stocks@'192.168.1.%'` (samme password som
+lokalt) har adgang til `stocks`-DB'en. Workbench: host **192.168.1.85**, port 3306, user
+`stocks`, db `stocks`. (HTPC's LAN-IP er 192.168.1.85 på `enp3s0`.)
 
 ## Yahoo-dataadgang (vigtigt)
 
 Al datahentning går gennem `dk.stockAnalyzer.YahooClient` (ren Java, `HttpURLConnection` + Jackson). Yahoo kræver siden 2023 cookie + crumb:
 1. cookie: `GET https://fc.yahoo.com` (følg IKKE redirects — `Set-Cookie` er på det direkte svar)
 2. crumb: `GET https://query1.finance.yahoo.com/v1/test/getcrumb` med cookien
-3. data: historik via `v8/chart`, navn+marketCap via `v7/quote?...&crumb=`
+3. data:
+   - **priser:** `v8/chart/<symbol>?range=10y&interval=1d&events=div,split` (OHLCV +
+     adjclose + udbytte/split-events) — `YahooClient.getDailyHistory`
+   - **fundamentals:** `v10/quoteSummary/<symbol>?modules=price,summaryProfile,summaryDetail,defaultKeyStatistics,financialData&crumb=` — `YahooClient.getQuoteSummary`. Tal er wrappet som `{raw, fmt}`; `StockDb` læser `.raw`.
+   - **batch-snapshot (momentum):** navn+marketCap via `v7/quote?...&crumb=`
 
 **Gotcha:** `getcrumb` afviser en detaljeret browser-User-Agent (fuld Chrome-streng) med HTTP 429, men accepterer den generiske `"Mozilla/5.0"` — så YahooClient bruger bevidst den korte UA. `getcrumb` har en stram rate-limit; den kaldes derfor kun én gang pr. kørsel (caches). `YahooClient.rateLimitMs` (default 1500 ms) + 429-backoff styrer kadencen — sæt lavere for fart, men pas på penalty-box.
 
@@ -66,9 +165,10 @@ Al datahentning går gennem `dk.stockAnalyzer.YahooClient` (ren Java, `HttpURLCo
 
 **✅ Gjort:**
 1. **Maven `pom.xml`** — `sourceDirectory=src`, yahoofinance-api 3.17.0 + jackson-databind 2.18.2. Compiler-plugin kompilerer kun `dk/stockAnalyzer/**` (holder den gamle 2009-kode i dk/skov m.fl. ude).
-2. **Windows-stier fjernet** — `YahooStockFetcher` læser `doc/allYahooStocks.txt`, `ExcelGenerator` skriver `output/stockScreener.csv` (opretter mappen), `.bin` i `output/`. Plus `YYYY`→`yyyy`-datofix.
+2. **Windows-stier fjernet** — `YahooStockFetcher` læser `doc/allYahooStocks.txt`, `ExcelGenerator` skriver `output/stockScreener.csv` (opretter mappen). Plus `YYYY`→`yyyy`-datofix.
 3. **Crumb/cookie løst** — ny `YahooClient` (se ovenfor). `YahooStockFetcher` omskrevet til den; bygger historik-map med index 0 = nyeste (det `AllansStrategy` forventer). En gammel loop-bug (sprang første symbol over, tilføjede `null`) er rettet.
-4. **Rate limiting** — `YahooClient.rateLimitMs` + 429-backoff.
+4. **Rate limiting** — adaptiv AIMD i `YahooClient` (`currentDelayMs`, floor `MIN_DELAY_MS`=40 ms, loft 4000 ms) + 429-backoff.
+7. **DB-persistens** — kurser i MariaDB via `StockDb` (afløser `.bin`-serialisering). ≥70%-historik-tærskel + normaliseret score.
 5. **(Delvist) links** — navn/marketCap kommer nu fra `v7/quote`. `GoogleStockCopyPasteLinkGenerator` peger stadig på lukkede `google.com/finance`-links; erstat evt. med `https://finance.yahoo.com/quote/<symbol>` eller TradingView (`https://www.tradingview.com/chart/?symbol=CPH:<symbol-uden-.CO>`).
 
 **⏳ Udestår:**
@@ -89,23 +189,27 @@ stockOverview/
 │   ├── dk/stockAnalyzer/     ← AKTIV kode, alt kører herfra
 │   │   ├── Main.java
 │   │   ├── AllansStrategy.java
-│   │   ├── YahooClient.java   ← NY: crumb/cookie + v8/chart + v7/quote
+│   │   ├── Ingest.java         ← NY: primær data-ingestion (10y OHLCV + fundamentals → DB)
+│   │   ├── YahooClient.java    ← crumb/cookie + v8/chart (10y OHLCV) + v10/quoteSummary + v7/quote
 │   │   ├── YahooStockFetcher.java
 │   │   ├── StockWrapper.java
 │   │   ├── StockFilterHelper.java
 │   │   ├── ExcelGenerator.java
 │   │   ├── GoogleStockCopyPasteLinkGenerator.java
-│   │   ├── PortefolioPersister.java
+│   │   ├── StockDb.java         ← NY: MariaDB-persistens (afløser PortefolioPersister)
 │   │   └── TestStock.java
 │   ├── dk/skov/              ← GAMMELT, brug ikke (2009-era, bruger defunct CSV-endpoint)
 │   ├── dk/momentumStock/     ← Alternativ momentum-implementering, ikke brugt
 │   └── dk/techan/            ← HTML chart-generator, ikke brugt
 ├── pom.xml                    ← Maven build (sourceDirectory=src)
 ├── lib/                       ← gamle jars; ikke længere på classpath (Maven styrer deps)
+├── config/
+│   ├── db.properties.example ← skabelon for DB-credentials (committet)
+│   └── db.properties         ← rigtige credentials (gitignored)
 ├── doc/
 │   ├── allYahooStocks.txt    ← 25.242 symboler (fra ~2015, forældet)
 │   └── todo.txt
-├── output/                    ← runtime-output (CSV + .bin), gitignored
+├── output/                    ← runtime-output (CSV), gitignored
 ├── out/                       ← gammel IntelliJ-output, gitignored
 └── stocks3.iml                ← IntelliJ project fil
 ```
@@ -116,7 +220,7 @@ stockOverview/
 
 - `ExcelGenerator.java` brugte `SimpleDateFormat("YYYY-MM-dd")` (`YYYY` = ugebaseret ISO-år) — rettet til `yyyy-MM-dd`.
 - `AllansStrategy.java` bruger `TreeMap` som score-nøgle — hvis to aktier får samme score tilføjes en lille tilfældig decimal for at undgå kollision. Det er primitivt men fungerer.
-- `PortefolioPersister` bruger Java-serialisering. Ændringer i `StockWrapper.java` vil gøre gemte `.bin`-filer ulæselige.
+- Kurser persisteres nu i MariaDB (`StockDb`), ikke længere Java-serialisering til `.bin`. `StockWrapper.implements Serializable` er ikke længere nødvendigt for persistens (men skader ikke).
 - `StockFilterHelper` itererer `stocks` og fjerner fra `newStockList` under iteration — fungerer fordi der itereres over den originale liste. Ikke elegant men korrekt.
 
 ---

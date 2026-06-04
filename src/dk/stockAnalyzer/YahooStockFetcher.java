@@ -13,6 +13,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class YahooStockFetcher {
 
     static int daysHistory;
+    /** Accepter aktier med mindst denne andel af det fulde historik-vindue (resten skippes).
+     *  AllansStrategy normaliserer scoren, så kort og lang historik er sammenlignelige. */
+    public static final double MIN_HISTORY_FRACTION = 0.70;
     private static final String NOT_FOUND_FILE = "doc" + File.separator + "notFoundStocks.txt";
     private static Set<String> notFoundSymbols = new HashSet<>();
 
@@ -96,20 +99,23 @@ public class YahooStockFetcher {
             YahooClient.History hist = YahooClient.getHistory(name, daysHistory * 2);
 
             int needed = daysHistory + 2;
+            int minClose = (int) Math.ceil(needed * MIN_HISTORY_FRACTION);
             if (hist.closes.size() == 0) {
                 markNotFound(name);
                 return null;
             }
-            if (hist.closes.size() < needed) {
+            if (hist.closes.size() < minClose) {
                 System.out.println("Springer over (for lidt historik: " + hist.closes.size()
-                        + "/" + needed + "): " + name);
+                        + "/" + needed + ", min " + minClose + "): " + name);
                 return null;
             }
 
+            // Brug op til 'needed' nyeste punkter; korte historikker bruger det de har.
+            int avail = Math.min(hist.closes.size(), needed);
             HashMap<Integer, Double> closeMap = new HashMap<Integer, Double>();
             HashMap<Integer, Calendar> dateMap = new HashMap<Integer, Calendar>();
             int newest = hist.closes.size() - 1;
-            for (int i = 0; i < needed; i++) {
+            for (int i = 0; i < avail; i++) {
                 int src = newest - i;
                 closeMap.put(i, hist.closes.get(src));
                 Calendar cal = Calendar.getInstance();

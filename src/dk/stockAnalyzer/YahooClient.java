@@ -37,18 +37,22 @@ public class YahooClient {
     private static final String USER_AGENT = "Mozilla/5.0";
     private static final String COOKIE_URL = "https://fc.yahoo.com";
     private static final String CRUMB_URL  = "https://query1.finance.yahoo.com/v1/test/getcrumb";
-    private static final String CHART_URL  = "https://query1.finance.yahoo.com/v8/finance/chart/";
-    private static final String QUOTE_URL  = "https://query1.finance.yahoo.com/v7/finance/quote";
+    private static final String CHART_URL   = "https://query1.finance.yahoo.com/v8/finance/chart/";
+    private static final String QUOTE_URL   = "https://query1.finance.yahoo.com/v7/finance/quote";
+    private static final String SUMMARY_URL = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/";
+    /** quoteSummary-moduler der dækker profil + alle screener-relevante nøgletal. */
+    private static final String SUMMARY_MODULES =
+            "price,summaryProfile,summaryDetail,defaultKeyStatistics,financialData";
 
     /** Antal parallelle tråde. */
     public static int parallelism = 8;
     private static final int MAX_RETRIES = 3;
 
     // --- Adaptiv rate limiting (AIMD) ---
-    private static final long MIN_DELAY_MS = 80;
+    private static final long MIN_DELAY_MS = 40;   // floor: kør hurtigere når Yahoo tillader det
     private static final long MAX_DELAY_MS = 4000;
     private static final int  SUCCESSES_BEFORE_SPEEDUP = 15;
-    public  static volatile long currentDelayMs = 120;
+    public  static volatile long currentDelayMs = 60;
     private static final AtomicInteger consecutiveSuccesses = new AtomicInteger(0);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -300,5 +304,113 @@ public class YahooClient {
             }
         }
         return result;
+    }
+
+    // ===================================================================
+    //  Ingestion: fuld OHLCV-historik + dybe fundamentals (screener-data)
+    // ===================================================================
+
+    private static String enc(String s) {
+        return URLEncoder.encode(s, StandardCharsets.UTF_8);
+    }
+
+    /** Én handelsdag: OHLCV + adjClose. */
+    public static class Bar {
+        public long   timestamp; // epoch-sekunder
+        public Double open, high, low, close, adjClose;
+        public Long   volume;
+    }
+
+    /** Daglig historik inkl. udbytte- og split-events. */
+    public static class DailyHistory {
+        public final List<Bar> bars = new ArrayList<>();
+        public final TreeMap<Long, Double>   dividends = new TreeMap<>(); // ts -> beløb
+        public final TreeMap<Long, double[]> splits    = new TreeMap<>(); // ts -> {numerator, denominator}
+    }
+
+    /**
+     * Henter daglig OHLCV-historik via v8/chart.
+     * period1Sec == null  -> hele 10-års vinduet (range=10y), brugt til fuld backfill.
+     * period1Sec != null  -> kun fra det tidspunkt og frem (inkrementel daglig kørsel).
+     */
+    public static DailyHistory getDailyHistory(String symbol, Long period1Sec) throws IOException {
+        String url;
+        if (period1Sec == null) {
+            url = CHART_URL + enc(symbol) + "?range=10y&interval=1d&events=div,split";
+        } else {
+            long now = System.currentTimeMillis() / 1000L;
+            url = CHART_URL + enc(symbol) + "?period1=" + period1Sec + "&period2=" + now
+                    + "&interval=1d&events=div,split";
+        }
+        JsonNode root = getJson(url);
+        JsonNode result = root.path("chart").path("result");
+        if (!result.isArray() || result.size() == 0) {
+            throw new IOException("Ingen chart-result for " + symbol);
+        }
+        JsonNode r0 = result.get(0);
+        JsonNode ts = r0.path("timestamp");
+        JsonNode quoteArr = r0.path("indicators").path("quote");
+        JsonNode adjArr   = r0.path("indicators").path("adjclose");
+        DailyHistory h = new DailyHistory();
+        if (ts.isArray() && quoteArr.isArray() && quoteArr.size() > 0) {
+            JsonNode q = quoteArr.get(0);
+            JsonNode openA = q.path("open"), highA = q.path("high"), lowA = q.path("low"),
+                     closeA = q.path("close"), volA = q.path("volume");
+            JsonNode adjA = (adjArr.isArray() && adjArr.size() > 0) ? adjArr.get(0).path("adjclose") : null;
+            for (int i = 0; i < ts.size(); i++) {
+                JsonNode c = closeA.get(i);
+                if (c == null || c.isNull()) continue; // spring huller over (helligdage/manglende)
+                Bar b = new Bar();
+                b.timestamp = ts.get(i).asLong();
+                b.open  = num(openA, i);
+                b.high  = num(highA, i);
+                b.low   = num(lowA, i);
+                b.close = num(closeA, i);
+                b.adjClose = (adjA != null) ? num(adjA, i) : null;
+                JsonNode v = volA.get(i);
+                b.volume = (v != null && !v.isNull()) ? v.asLong() : null;
+                h.bars.add(b);
+            }
+        }
+        JsonNode events = r0.path("events");
+        JsonNode divs = events.path("dividends");
+        if (divs.isObject()) {
+            for (Iterator<JsonNode> it = divs.elements(); it.hasNext(); ) {
+                JsonNode d = it.next();
+                if (d.hasNonNull("date") && d.hasNonNull("amount"))
+                    h.dividends.put(d.get("date").asLong(), d.get("amount").asDouble());
+            }
+        }
+        JsonNode sp = events.path("splits");
+        if (sp.isObject()) {
+            for (Iterator<JsonNode> it = sp.elements(); it.hasNext(); ) {
+                JsonNode s = it.next();
+                if (s.hasNonNull("date"))
+                    h.splits.put(s.get("date").asLong(),
+                            new double[]{ s.path("numerator").asDouble(Double.NaN),
+                                          s.path("denominator").asDouble(Double.NaN) });
+            }
+        }
+        return h;
+    }
+
+    private static Double num(JsonNode arr, int i) {
+        if (arr == null) return null;
+        JsonNode n = arr.get(i);
+        return (n != null && !n.isNull()) ? n.asDouble() : null;
+    }
+
+    /**
+     * Henter dybe fundamentals via v10/quoteSummary (profil + key stats + financialData).
+     * Returnerer result[0]-noden rå (indeholder modulerne som child-noder), eller null.
+     */
+    public static JsonNode getQuoteSummary(String symbol) throws IOException {
+        ensureAuth();
+        String url = SUMMARY_URL + enc(symbol) + "?modules=" + SUMMARY_MODULES
+                + "&crumb=" + enc(crumb);
+        JsonNode root = getJson(url);
+        JsonNode res = root.path("quoteSummary").path("result");
+        if (!res.isArray() || res.size() == 0) return null;
+        return res.get(0);
     }
 }

@@ -38,10 +38,20 @@ public class AllansStrategy {
 
     public double getScore(int daysBack, double weightFactorPlus, double weightFactorMnius, HashMap<Integer, Double> historicalValues) {
 
+        // Afgræns til den faktisk tilgængelige historik: vi læser get(i) og get(i+1),
+        // så vi kan score over højst (size-1) dage. Aktier med kort historik (≥70%,
+        // se YahooStockFetcher.MIN_HISTORY_FRACTION) scorer derfor over færre dage —
+        // derfor normaliseres scoren bagefter, så lange og korte historikker er
+        // sammenlignelige (gennemsnitlig vægtet dagsbevægelse i stedet for sum).
+        int effectiveDays = Math.min(daysBack, historicalValues.size() - 1);
+        if (effectiveDays < 2) {
+            return 0.0; // for lidt til et signal
+        }
+
         Double score = 0d;
-        for (int i = 0; i < daysBack; i++) {
+        for (int i = 0; i < effectiveDays; i++) {
             //double currentWeightFactorPlus = (weightFactorPlus / daysBack) * (daysBack - i);
-            double currentWeightFactorPlus = (((daysBack-1) - i*1d) / (daysBack-1)*1d) * (weightFactorPlus-1*1d) + 1;
+            double currentWeightFactorPlus = (((effectiveDays-1) - i*1d) / (effectiveDays-1)*1d) * (weightFactorPlus-1*1d) + 1;
             double currentWeightFactorMinusMultiplyer = currentWeightFactorPlus * weightFactorMnius;
 
             if(printDebug) {
@@ -72,7 +82,9 @@ public class AllansStrategy {
 
         printDebug = false;
 
-        return score;
+        // Normaliser: gennemsnitlig vægtet dagsbevægelse, så scoren ikke skalerer med
+        // antal dage (ellers ville lang historik systematisk slå kort historik).
+        return score / effectiveDays;
     }
 
 

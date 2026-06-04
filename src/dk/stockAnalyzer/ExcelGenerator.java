@@ -5,6 +5,7 @@ import java.io.FileOutputStream;
 import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.SortedMap;
 
 /**
@@ -26,11 +27,16 @@ public class ExcelGenerator {
         }
 
 
-        int numberOfDates = sortedMap.get(sortedMap.firstKey()).getHistoricalValues().size();
+        // Historik-længder kan variere pr. aktie (≥70%-tærsklen), så dimensionér
+        // efter den længste, og brug dens datoer som header (index 0 = nyeste).
+        int numberOfDates = 0;
+        StockWrapper longest = null;
+        for (StockWrapper sw : sortedMap.values()) {
+            int len = sw.getHistoricalValues().size();
+            if (len > numberOfDates) { numberOfDates = len; longest = sw; }
+        }
         int numberOfStocks = sortedMap.size();
         String[][] matrix = new String[numberOfStocks + 1][numberOfDates + 3];
-
-
 
 
         //insert first history days
@@ -39,9 +45,9 @@ public class ExcelGenerator {
         matrix[x][y++] = "score:";
         matrix[x][y++] = "name:";
         matrix[x][y++] = "symbol:";
-        for (int day : sortedMap.get(sortedMap.firstKey()).getHistoricalValues2().keySet()) {
-            Calendar cal = sortedMap.get(sortedMap.firstKey()).getHistoricalValues2().get(day);
-            matrix[x][y++] = String.valueOf(sdf.format(cal.getTime()));
+        for (int day = 0; day < numberOfDates; day++) {
+            Calendar cal = longest.getHistoricalValues2().get(day);
+            matrix[x][y++] = cal != null ? String.valueOf(sdf.format(cal.getTime())) : "";
         }
 
 
@@ -53,15 +59,20 @@ public class ExcelGenerator {
         for (double score : sortedMap.keySet()) {
             y = 0;
             StockWrapper stockWrapper = sortedMap.get(score);
+            HashMap<Integer, Double> values = stockWrapper.getHistoricalValues();
 
             matrix[x][y++] = String.valueOf(score);
             matrix[x][y++] = stockWrapper.getName();
             matrix[x][y++] = stockWrapper.getSymbol();
 
-            for (Double d : stockWrapper.getHistoricalValues().values()) {
-                //matrix[x][y++] = String.valueOf(d);
-                double base100index = calculateBase0Index(d, stockWrapper.getHistoricalValues().get(stockWrapper.getHistoricalValues().size() - 1));
-                matrix[x][y++] = String.valueOf(base100index);
+            Double base = values.get(values.size() - 1); // ældste = base
+            for (int day = 0; day < numberOfDates; day++) {
+                Double d = values.get(day);
+                if (d != null && base != null) {
+                    matrix[x][y++] = String.valueOf(calculateBase0Index(d, base));
+                } else {
+                    matrix[x][y++] = ""; // aktien har ikke data så langt tilbage
+                }
             }
 
             x++;

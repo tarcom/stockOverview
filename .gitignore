@@ -7,3 +7,6 @@ out/
 # Runtime output fra screeneren
 output/
 *.bin
+
+# DB-credentials (genbruger stocks-projektets MariaDB) — må aldrig committes
+config/db.properties
