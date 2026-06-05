@@ -16,7 +16,7 @@ function render_header(string $active): void { ?>
     <a href="index.php"<?= $active === 'universe' ? ' class="active"' : '' ?>>Universet</a>
     <a href="screener.php"<?= $active === 'screener' ? ' class="active"' : '' ?>>Screener</a>
     <a href="about.php"<?= $active === 'about' ? ' class="active"' : '' ?>>Om</a>
-    <a href="index.php#plan">Plan &amp; status</a>
+    <a href="plan.php"<?= $active === 'plan' ? ' class="active"' : '' ?>>Plan &amp; status</a>
   </nav>
 </header>
 <?php }

@@ -1,10 +1,6 @@
 <?php
 require __DIR__ . '/lib/stats.php';
-require __DIR__ . '/lib/markdown.php';
 require __DIR__ . '/lib/header.php';
-
-$planHtml = is_file(__DIR__ . '/../PLAN.md')
-    ? render_markdown(file_get_contents(__DIR__ . '/../PLAN.md')) : '';
 
 $ready = screener_exists();
 if ($ready) {
@@ -100,12 +96,6 @@ donut('cType', <?= json_encode($types) ?>);
 bar('cHist', <?= json_encode($hist) ?>, 'Aktier');
 </script>
 <?php endif; ?>
-
-<section class="wrap plan" id="plan">
-  <div class="card">
-    <?= $planHtml ?>
-  </div>
-</section>
 
 <?php render_footer($ready ? ($h['latest'] ?? null) : null); ?>
 </body>
