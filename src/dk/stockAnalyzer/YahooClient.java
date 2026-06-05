@@ -49,11 +49,10 @@ public class YahooClient {
     private static final int MAX_RETRIES = 3;
 
     // --- Adaptiv rate limiting (AIMD) ---
-    private static final long MIN_DELAY_MS = 120;  // floor: ~500 kald/min — under Yahoos mur, så vi cruiser
-                                                   // støt i stedet for at sawtoothe (burst → 429-storm → cooldown)
+    private static final long MIN_DELAY_MS = 40;   // floor: ~1500 kald/min (aggressivt — burst-strategi via genstart)
     private static final long MAX_DELAY_MS = 4000;
     private static final int  SUCCESSES_BEFORE_SPEEDUP = 8;
-    public  static volatile long currentDelayMs = 120;
+    public  static volatile long currentDelayMs = 60;
     private static final AtomicInteger consecutiveSuccesses = new AtomicInteger(0);
 
     // Dyb cooldown: ved vedvarende 429 på max-delay hjælper det IKKE at blive ved med at poke
