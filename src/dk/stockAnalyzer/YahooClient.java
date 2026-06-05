@@ -69,19 +69,38 @@ public class YahooClient {
     private static String crumb;
     private static long lastRequestTime = 0;
 
+    // Yahoos rate-limit ser ud til at være per-crumb/session (en frisk crumb = frisk quota).
+    // Vi roterer derfor crumben proaktivt med jævne mellemrum — svarer til at genstarte,
+    // bare uden at stoppe. (Crumb-rotation kan også tvinges af onRateLimitHit via lastAuthMs=0.)
+    private static final long CRUMB_ROTATE_MS = 150_000;        // tid: senest hvert 2,5 min
+    private static final int  ROTATE_EVERY_REQUESTS = 2500;     // volumen: før Yahoos ~3000-kald-mur pr. crumb
+    private static volatile long lastAuthMs = 0;
+    private static final AtomicInteger requestsSinceAuth = new AtomicInteger(0);
+
     // ---------------------------------------------------------------- auth
 
     private static synchronized void ensureAuth() throws IOException {
-        if (cookie != null && crumb != null) {
+        long now = System.currentTimeMillis();
+        if (cookie != null && crumb != null && (now - lastAuthMs) < CRUMB_ROTATE_MS
+                && requestsSinceAuth.get() < ROTATE_EVERY_REQUESTS) {
             return;
         }
+        boolean rotating = (crumb != null); // havde vi en crumb? så er det en rotation, ikke første auth
         IOException last = null;
         for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             throttle();
             try {
                 cookie = fetchCookie();
                 crumb = fetchCrumb(cookie);
-                System.out.println("YahooClient: hentede cookie + crumb (crumb=" + crumb + ")");
+                lastAuthMs = System.currentTimeMillis();
+                requestsSinceAuth.set(0);
+                if (rotating) {
+                    currentDelayMs = MIN_DELAY_MS;       // frisk quota → fuld fart igen
+                    consecutiveSuccesses.set(0); maxHits.set(0); cooldownUntil = 0;
+                    System.out.println("  [auth] roterede crumb for frisk quota (crumb=" + crumb + ") → " + currentDelayMs + "ms/slot");
+                } else {
+                    System.out.println("YahooClient: hentede cookie + crumb (crumb=" + crumb + ")");
+                }
                 return;
             } catch (IOException e) {
                 cookie = null;
@@ -166,6 +185,7 @@ public class YahooClient {
 
     private static synchronized void onSuccess() {
         maxHits.set(0);
+        requestsSinceAuth.incrementAndGet(); // tæl mod crumb-rotation
         int s = consecutiveSuccesses.incrementAndGet();
         if (s >= SUCCESSES_BEFORE_SPEEDUP) {
             consecutiveSuccesses.set(0);
@@ -182,13 +202,14 @@ public class YahooClient {
         long prev = currentDelayMs;
         currentDelayMs = Math.min(MAX_DELAY_MS, currentDelayMs * 2);
         System.out.printf("  [rate] ↓ 429: %dms → %dms/slot%n", prev, currentDelayMs);
-        // Vedvarende 429 på max-delay → dyb cooldown så Yahoos rate-vindue kan klinge af,
-        // i stedet for at blive ved med at poke hver 4s (hvilket holder penalty'en i live).
+        // Få 429'ere i træk ved max betyder at crumbens quota er brugt op. En frisk crumb
+        // giver frisk quota (= det din genstart gør), så vi tvinger en rotation frem for at
+        // sidde fast på 4s. Kort pause så stormen lægger sig før rotationen tester den nye crumb.
         if (currentDelayMs >= MAX_DELAY_MS && maxHits.incrementAndGet() >= MAX_HITS_BEFORE_COOLDOWN) {
             maxHits.set(0);
-            cooldownUntil = System.currentTimeMillis() + DEEP_COOLDOWN_MS;
-            currentDelayMs = 1000; // efter cooldown: prøv forsigtigt igen frem for at blive på max
-            System.out.printf("  [rate] ⏸ vedvarende 429 ved max — dyb cooldown i %d min%n", DEEP_COOLDOWN_MS / 60000);
+            requestsSinceAuth.set(ROTATE_EVERY_REQUESTS); // tving crumb-rotation ved næste ensureAuth
+            cooldownUntil = System.currentTimeMillis() + 15_000; // kort pause (ikke 5 min)
+            System.out.println("  [rate] ⏸ vedvarende 429 → roterer crumb om 15s (frisk quota)");
         }
     }
 
