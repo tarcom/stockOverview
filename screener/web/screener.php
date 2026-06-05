@@ -176,6 +176,21 @@ $presets = [
     </div>
     <div class="ta-main"><canvas id="taPrice"></canvas></div>
     <div class="ta-pane"><canvas id="taSubChart"></canvas></div>
+
+    <div class="ta-details">
+      <div class="ta-block">
+        <h4>Nøgletal</h4>
+        <div class="fund-grid" id="taFundGrid"></div>
+      </div>
+      <div class="ta-block">
+        <h4>I sektoren <span id="taSectorName" class="muted"></span></h4>
+        <div id="taPercentiles" class="pcts"></div>
+      </div>
+      <div class="ta-block ta-desc">
+        <h4>Om selskabet</h4>
+        <p id="taSummary"></p>
+      </div>
+    </div>
   </div>
 </div>
 

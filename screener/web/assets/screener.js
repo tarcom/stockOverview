@@ -497,8 +497,46 @@ async function openStock(sym) {
     TA_DATA = await (await fetch('api.php?' + q.toString())).json();
   } catch (e) { $('.m-name', m).textContent = 'kunne ikke hente data'; return; }
   $('.m-name', m).textContent = TA_DATA.name || '';
-  $('.modal-sub', m).textContent = [TA_DATA.sector, TA_DATA.country, TA_DATA.currency].filter(Boolean).join(' · ');
+  $('.modal-sub', m).textContent = [TA_DATA.sector, TA_DATA.country, TA_DATA.exchange, TA_DATA.currency].filter(Boolean).join(' · ');
   renderTA();
+  renderDetails();
+}
+
+// fundamentals + sektor-percentiler + beskrivelse (statisk pr. aktie)
+function renderDetails() {
+  const d = TA_DATA, m = d.meta || {};
+  const FUND = [
+    ['Markedsværdi', 'mkt_cap_usd', 'usd'], ['P/E', 'trailing_pe', 'num'], ['P/B', 'price_to_book', 'num'],
+    ['EV/EBITDA', 'ev_to_ebitda', 'num'], ['ROE', 'return_on_equity', 'pct'], ['Nettomargin', 'profit_margins', 'pct'],
+    ['Gæld/EK', 'debt_to_equity', 'num'], ['Udbytte', 'dividend_yield', 'pct'], ['Kvalitet 1Y', 'quality_1y', 'num'],
+    ['CAGR 3Y', 'cagr_3y', 'pct'], ['Afkast 1Y', 'ret_1y', 'pct'], ['Sharpe 1Y', 'sharpe_1y', 'num'],
+    ['Beta', 'beta_1y', 'num'], ['Markeds-korr²', 'mkt_r2_1y', 'num'], ['Max drawdown 1Y', 'maxdd_1y', 'pct'],
+  ];
+  const SIGNED = new Set(['return_on_equity','profit_margins','cagr_3y','ret_1y','maxdd_1y']);
+  $('#taFundGrid').innerHTML = FUND.map(([lbl, key, fmt]) =>
+    m[key] == null ? '' : `<div class="fund-cell"><span class="fl">${lbl}</span><span class="fv ${SIGNED.has(key) ? cls(+m[key]) : ''}">${fmtVal(+m[key], fmt)}</span></div>`
+  ).join('');
+
+  $('#taSectorName').textContent = d.sector ? '(' + d.sector + ', ' + (d.percentiles._n || 0) + ' selskaber)' : '';
+  const PCT = [
+    ['P/E', 'trailing_pe', false], ['P/B', 'price_to_book', false], ['EV/EBITDA', 'ev_to_ebitda', false],
+    ['ROE', 'return_on_equity', true], ['Nettomargin', 'profit_margins', true], ['Kvalitet 1Y', 'quality_1y', true],
+    ['Afkast 1Y', 'ret_1y', true], ['Udbytte', 'dividend_yield', true], ['Omsætningsvækst', 'revenue_growth', true],
+  ];
+  const p = d.percentiles || {};
+  const html = PCT.map(([lbl, key, higher]) => {
+    if (p[key] == null) return '';
+    const pct = +p[key];
+    const good = higher ? pct * 100 : (1 - pct) * 100;
+    const n = Math.min(99, Math.round(good));
+    const txt = higher ? `højere end ${n}%` : `lavere end ${n}%`;
+    return `<div class="pct-row"><span class="pl">${lbl}</span>
+      <span class="pbar"><span style="width:${good.toFixed(0)}%"></span></span>
+      <span class="pv">${txt}</span></div>`;
+  }).join('');
+  $('#taPercentiles').innerHTML = html || '<div class="muted">Ingen sektor-data.</div>';
+
+  $('#taSummary').textContent = d.summary || '(ingen beskrivelse tilgængelig)';
 }
 function closeStock() {
   $('#stockModal').hidden = true;

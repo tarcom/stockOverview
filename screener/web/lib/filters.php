@@ -292,8 +292,31 @@ function flt_stock(string $symbol, string $window): array {
     $pts = [];
     foreach ($st as $r) $pts[] = [$r['price_date'], (float)$r['p'], $r['volume'] !== null ? (int)$r['volume'] : null];
 
-    $meta = db()->prepare("SELECT name, currency, sector, country FROM " . t('securities') . " WHERE symbol = ?");
+    $meta = db()->prepare("SELECT name, currency, sector, country, exchange, employees, website, business_summary
+        FROM " . t('securities') . " WHERE symbol = ?");
     $meta->execute([$symbol]); $m = $meta->fetch() ?: [];
+
+    // Hele screener-rækken (fundamentals + alle metrics) til detalje-panelet.
+    $sc = db()->prepare("SELECT * FROM " . t('screener') . " WHERE symbol = ?");
+    $sc->execute([$symbol]); $row = $sc->fetch() ?: [];
+
+    // Percentil-rang inden for sektoren for et par nøgletal (fraktion af peers med metric <= denne).
+    $pctMetrics = ['trailing_pe','price_to_book','ev_to_ebitda','return_on_equity','profit_margins',
+        'dividend_yield','quality_1y','ret_1y','revenue_growth'];
+    $pcts = [];
+    $sector = $row['sector'] ?? null;
+    if ($sector) {
+        $sel = []; $bind = [];
+        foreach ($pctMetrics as $mt) {
+            if (isset($row[$mt]) && $row[$mt] !== null) { $sel[] = "AVG(`$mt` <= ?) `$mt`"; $bind[] = $row[$mt]; }
+        }
+        if ($sel) {
+            $bind[] = $sector;
+            $q = db()->prepare("SELECT " . implode(',', $sel) . ", COUNT(*) _n FROM " . t('screener') . " WHERE sector = ?");
+            $q->execute($bind);
+            $pcts = $q->fetch() ?: [];
+        }
+    }
 
     $bench = cfg()['rs_benchmark']; $bp = [];
     $bs = db()->prepare("SELECT price_date, close FROM " . t('indexes') . " WHERE symbol = ? AND price_date >= ? ORDER BY price_date");
@@ -301,6 +324,8 @@ function flt_stock(string $symbol, string $window): array {
     foreach ($bs as $r) $bp[] = [$r['price_date'], (float)$r['close']];
 
     return ['symbol'=>$symbol, 'name'=>$m['name'] ?? $symbol, 'currency'=>$m['currency'] ?? '',
-        'sector'=>$m['sector'] ?? '', 'country'=>$m['country'] ?? '', 'window'=>$window,
+        'sector'=>$m['sector'] ?? '', 'country'=>$m['country'] ?? '', 'exchange'=>$m['exchange'] ?? '',
+        'employees'=>$m['employees'] ?? null, 'website'=>$m['website'] ?? '', 'summary'=>$m['business_summary'] ?? '',
+        'window'=>$window, 'meta'=>$row, 'percentiles'=>$pcts,
         'points'=>$pts, 'bench'=>['symbol'=>$bench, 'label'=>cfg()['benchmarks'][$bench] ?? $bench, 'points'=>$bp]];
 }

@@ -193,3 +193,22 @@
 .saved-item a:hover { color: var(--accent); }
 .saved-x { cursor: pointer; color: var(--muted); }
 .saved-x:hover { color: var(--err); }
+
+/* Detalje-panel i TA-modal (fundamentals + percentiler + beskrivelse) */
+.ta-details { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin-top: 1.3rem;
+  border-top: 1px solid var(--border); padding-top: 1.1rem; }
+.ta-block h4 { margin: 0 0 .6rem; font-size: .92rem; color: var(--text); }
+.ta-desc { grid-column: 1 / -1; }
+.ta-desc p { color: var(--muted); font-size: .86rem; line-height: 1.6; margin: 0; }
+.fund-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: .5rem; }
+.fund-cell { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: .45rem .6rem; display: flex; flex-direction: column; }
+.fund-cell .fl { color: var(--muted); font-size: .72rem; }
+.fund-cell .fv { font-weight: 700; font-variant-numeric: tabular-nums; }
+.fund-cell .fv.pos { color: var(--ok); } .fund-cell .fv.neg { color: var(--err); }
+.pcts { display: flex; flex-direction: column; gap: .45rem; }
+.pct-row { display: flex; align-items: center; gap: .6rem; font-size: .82rem; }
+.pct-row .pl { width: 110px; flex-shrink: 0; color: var(--text); }
+.pct-row .pbar { flex: 1; height: 8px; background: var(--panel2); border-radius: 4px; overflow: hidden; }
+.pct-row .pbar span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #2ec4b6); }
+.pct-row .pv { width: 130px; text-align: right; color: var(--muted); }
+@media (max-width: 700px) { .ta-details { grid-template-columns: 1fr; } }

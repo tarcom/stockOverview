@@ -73,4 +73,5 @@ Plus datakvalitet: `history_years`, `max_day_move` (luger korrupt Yahoo-data fra
 - [ ] Percentil-rang pr. metric (fx "P/E i nederste 10% af sektoren")
 - [ ] Likviditetsfiltre (min. pris, min. gns. volumen)
 - [ ] Kurater universet til **top 7 lande i EU + top 7 i verden** (relevans/handelbarhed; evt. som standard-filter)
-- [ ] Detalje-visning: fundamentals + virksomhedsbeskrivelse i TA-modal'en
+- [x] Detalje-visning: fundamentals + sektor-percentiler + virksomhedsbeskrivelse i TA-modal'en
+- [ ] Opret **buymeacoffee.com/noergaard** (linket ligger allerede live på siden — peger pt. på en konto der ikke findes endnu)
