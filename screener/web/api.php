@@ -1,0 +1,33 @@
+<?php
+/**
+ * JSON-API til screeneren.
+ *   ?action=facets   → min/max + histogrammer pr. range-filter + multivalg-muligheder (cachevenligt)
+ *   ?action=query    → live tælling + funnel + top-N resultater for de givne filtre
+ * Alle filter-parametre kommer som query-string (samme nøgler som i URL'en → delbar).
+ */
+require __DIR__ . '/lib/filters.php';
+
+header('Content-Type: application/json; charset=utf-8');
+
+try {
+    $action = $_GET['action'] ?? 'query';
+    if ($action === 'facets') {
+        echo json_encode(flt_facets());
+        exit;
+    }
+    // query
+    $sort  = $_GET['sort'] ?? 'quality_1y';
+    $dir   = $_GET['dir'] ?? 'desc';
+    $limit = max(1, min(200, (int)($_GET['limit'] ?? 20)));
+    $count = flt_count($_GET);
+    echo json_encode([
+        'count'   => $count,
+        'total'   => flt_total(),
+        'funnel'  => flt_funnel($_GET),
+        'results' => $count > 0 ? flt_results($_GET, $sort, $dir, $limit) : [],
+        'sort'    => $sort, 'dir' => $dir, 'limit' => $limit,
+    ]);
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode(['error' => $e->getMessage()]);
+}

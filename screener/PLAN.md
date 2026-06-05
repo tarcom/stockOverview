@@ -45,8 +45,14 @@ Plus datakvalitet: `history_years`, `max_day_move` (luger korrupt Yahoo-data fra
   - [x] Dashboard-grafer (Chart.js): sektorer, lande, industrier, type, datakvalitet
   - [x] `PLAN.md` renderet nederst på siden (egen minimal markdown-renderer)
   - [ ] Repræsentativt fuldt datasæt (afventer fuld precompute efter ingesten)
-- [ ] **Fase 2 — filter-motoren**: grupperede foldbare filtre (PriceRunner-stil), sliders med histogram bagved, live tæller + funnel, "i"-hjælpeikoner, delbar URL
-- [ ] **Fase 3 — udfaldsrum**: top-N tabel + base-100-grafer (med S&P500-overlay), sortering, valgbart antal rækker + tidsinterval
+- [x] **Fase 2 — filter-motoren** ✅
+  - [x] 48 range-filtre + 3 multivalg, grupperet i 8 foldbare kategorier (PriceRunner-stil)
+  - [x] Dual-range sliders med **histogram bagved** (outlier-robust, log-skala hvor relevant)
+  - [x] Live tæller + **funnel** (udfaldsrum snævres ind pr. filter) + sortering/antal/retning
+  - [x] "i"-hjælpeikoner (mouse-over) på alle filtre + **delbar URL** (filter-state i query)
+  - [x] Datakvalitets-default: skjuler >100%/dag-spikes; `api.php` (facets + query)
+  - [ ] Re-filtrerede histogrammer (pt. globale); facet-caching ved fuldt datasæt
+- [ ] **Fase 3 — udfaldsrum**: base-100-grafer pr. aktie (med S&P500-overlay) + tekniske indikatorer, valgbart tidsinterval (top-N tabel + sortering er på plads)
 - [ ] **Fase 4 — presets, sammenligning, polish**: strategi-presets ("Stabil compounder", "Value", "Momentum" …), base-100 multi-sammenligning
 
 ## TODO / backlog (bygges i mindre bidder)

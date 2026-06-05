@@ -28,7 +28,7 @@ if ($ready) {
 <body>
 <header class="topbar">
   <div class="brand">📈 StockScreener</div>
-  <nav><a href="#universe" class="active">Universet</a><a href="#plan">Plan &amp; status</a></nav>
+  <nav><a href="index.php" class="active">Universet</a><a href="screener.php">Screener</a><a href="#plan">Plan &amp; status</a></nav>
 </header>
 
 <?php if (!$ready): ?>
