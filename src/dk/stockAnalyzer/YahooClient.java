@@ -51,7 +51,7 @@ public class YahooClient {
     // --- Adaptiv rate limiting (AIMD) ---
     private static final long MIN_DELAY_MS = 40;   // floor: kør hurtigere når Yahoo tillader det
     private static final long MAX_DELAY_MS = 4000;
-    private static final int  SUCCESSES_BEFORE_SPEEDUP = 15;
+    private static final int  SUCCESSES_BEFORE_SPEEDUP = 8;
     public  static volatile long currentDelayMs = 60;
     private static final AtomicInteger consecutiveSuccesses = new AtomicInteger(0);
 
@@ -170,7 +170,7 @@ public class YahooClient {
         if (s >= SUCCESSES_BEFORE_SPEEDUP) {
             consecutiveSuccesses.set(0);
             long prev = currentDelayMs;
-            currentDelayMs = Math.max(MIN_DELAY_MS, (long)(currentDelayMs * 0.85));
+            currentDelayMs = Math.max(MIN_DELAY_MS, (long)(currentDelayMs * 0.70));
             if (currentDelayMs < prev) {
                 System.out.printf("  [rate] ↑ → %dms/slot%n", currentDelayMs);
             }
@@ -227,6 +227,10 @@ public class YahooClient {
                 last = new IOException("HTTP 401 for " + urlStr);
                 continue;
             }
+            // Andre svar (typisk 404): Yahoo svarede fint — det er IKKE rate-limiting.
+            // Tæl som success, så AIMD'en kan falde tilbage mod floor selv gennem lange
+            // not_found-stræk (ellers sidder den fast på max-delay efter en 429-storm).
+            onSuccess();
             throw new IOException("HTTP " + code + " for " + urlStr);
         }
         throw last != null ? last : new IOException("getJson fejlede: " + urlStr);
