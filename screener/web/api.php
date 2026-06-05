@@ -33,9 +33,12 @@ try {
         $out = fopen('php://output', 'w');
         fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM (Excel)
         if ($rows) {
-            $cols = array_keys($rows[0]);
-            fputcsv($out, $cols);
-            foreach ($rows as $r) fputcsv($out, $r);
+            // Dansk Excel: ';' som kolonne-separator + ',' som decimaltegn (modsat standard).
+            fputcsv($out, array_keys($rows[0]), ';', '"', '\\');
+            foreach ($rows as $r) {
+                $vals = array_map(fn($v) => is_numeric($v) ? str_replace('.', ',', (string)$v) : $v, $r);
+                fputcsv($out, $vals, ';', '"', '\\');
+            }
         }
         fclose($out); exit;
     }

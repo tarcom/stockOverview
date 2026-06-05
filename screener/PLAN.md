@@ -72,3 +72,5 @@ Plus datakvalitet: `history_years`, `max_day_move` (luger korrupt Yahoo-data fra
 - [ ] `stockOverview_runs`: lad Java-ingesten logge fulde/delvise kørsler (til dashboard-status)
 - [ ] Percentil-rang pr. metric (fx "P/E i nederste 10% af sektoren")
 - [ ] Likviditetsfiltre (min. pris, min. gns. volumen)
+- [ ] Kurater universet til **top 7 lande i EU + top 7 i verden** (relevans/handelbarhed; evt. som standard-filter)
+- [ ] Detalje-visning: fundamentals + virksomhedsbeskrivelse i TA-modal'en
