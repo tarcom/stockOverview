@@ -536,7 +536,11 @@ function renderDetails() {
   }).join('');
   $('#taPercentiles').innerHTML = html || '<div class="muted">Ingen sektor-data.</div>';
 
-  $('#taSummary').textContent = d.summary || '(ingen beskrivelse tilgængelig)';
+  // "Om selskabet" skjules helt hvis der ingen beskrivelse er (fonde/indeks har aldrig én)
+  const desc = (d.summary || '').trim();
+  const descBlock = $('#taSummary').closest('.ta-block');
+  if (desc) { $('#taSummary').textContent = desc; descBlock.style.display = ''; }
+  else { descBlock.style.display = 'none'; }
 }
 function closeStock() {
   $('#stockModal').hidden = true;
