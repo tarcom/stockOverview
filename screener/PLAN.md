@@ -52,7 +52,10 @@ Plus datakvalitet: `history_years`, `max_day_move` (luger korrupt Yahoo-data fra
   - [x] "i"-hjælpeikoner (mouse-over) på alle filtre + **delbar URL** (filter-state i query)
   - [x] Datakvalitets-default: skjuler >100%/dag-spikes; `api.php` (facets + query)
   - [ ] Re-filtrerede histogrammer (pt. globale); facet-caching ved fuldt datasæt
-- [ ] **Fase 3 — udfaldsrum**: base-100-grafer pr. aktie (med S&P500-overlay) + tekniske indikatorer, valgbart tidsinterval (top-N tabel + sortering er på plads)
+- [~] **Fase 3 — udfaldsrum** (i gang)
+  - [x] Top-N tabel med sortering (på plads i Fase 2)
+  - [x] **Overlay base-100 graf** af de viste aktier + **benchmark-overlay** (S&P500/NASDAQ/Dow), valgbart tidsinterval (1M…10Y), klikbar forklaring (`api.php?action=chart`)
+  - [ ] Enkelt-aktie fokus-view (klik på række) med **tekniske indikatorer**: SMA 20/50/100/200, RSI, MACD i sub-pane + mouse-over-forklaringer
 - [ ] **Fase 4 — presets, sammenligning, polish**: strategi-presets ("Stabil compounder", "Value", "Momentum" …), base-100 multi-sammenligning
 
 ## TODO / backlog (bygges i mindre bidder)

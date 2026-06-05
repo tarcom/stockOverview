@@ -15,6 +15,13 @@ try {
         echo json_encode(flt_facets());
         exit;
     }
+    if ($action === 'chart') {
+        $syms  = isset($_GET['symbols']) && $_GET['symbols'] !== '' ? explode('~', $_GET['symbols']) : [];
+        $win   = $_GET['window'] ?? '3y';
+        $bench = $_GET['bench'] ?? cfg()['rs_benchmark'];
+        echo json_encode(flt_chart($syms, $win, $bench));
+        exit;
+    }
     // query
     $sort  = $_GET['sort'] ?? 'quality_1y';
     $dir   = $_GET['dir'] ?? 'desc';

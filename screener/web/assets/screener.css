@@ -112,3 +112,13 @@
   .screener { flex-direction: column; }
   .filters { width: 100%; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--border); }
 }
+
+/* Overlay base-100 graf */
+.chartbox { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.2rem; margin: 1rem 0; }
+.chart-controls { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .8rem; }
+.chart-controls strong { font-size: .95rem; }
+.chart-controls label { font-size: .82rem; color: var(--muted); display: flex; gap: .35rem; align-items: center; }
+.chart-controls select { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: .25rem .45rem; }
+.chart-controls .muted { font-size: .78rem; margin-left: auto; }
+.chart-canvas-wrap { position: relative; height: 360px; }
+@media (max-width: 900px) { .chart-canvas-wrap { height: 280px; } .chart-controls .muted { display: none; } }

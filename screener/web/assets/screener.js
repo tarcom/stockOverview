@@ -76,6 +76,8 @@ function wireControls() {
     refresh();
   });
   $('#hideJunk').addEventListener('change', refresh);
+  $('#chartWindow').addEventListener('change', loadChart);
+  $('#chartBench').addEventListener('change', loadChart);
   $('#resetBtn').addEventListener('click', resetAll);
   $('#shareBtn').addEventListener('click', () => {
     navigator.clipboard.writeText(location.href).then(() => {
@@ -225,6 +227,63 @@ function renderResults(rows, sort) {
     </tr>`;
   });
   $('#resultWrap').innerHTML = h + '</tbody></table>';
+  window.CURRENT_SYMBOLS = rows.map(r => r.symbol);
+  loadChart();
+}
+
+// ---------- overlay base-100 graf ----------
+const CHART_PALETTE = ['#5b8def','#2ec4b6','#ff9f1c','#e71d73','#9b5de5','#00bbf9','#80ed99',
+  '#f15bb5','#ffca3a','#ff70a6','#8ac926','#ff595e','#6a4c93','#1982c4','#52a675','#c77dff'];
+let overlayChart = null;
+
+async function loadChart() {
+  const syms = (window.CURRENT_SYMBOLS || []).slice(0, 16);
+  const cv = $('#overlayChart');
+  if (!syms.length) { if (overlayChart) { overlayChart.destroy(); overlayChart = null; } return; }
+  const win = $('#chartWindow').value, bench = $('#chartBench').value;
+  let d;
+  try {
+    const q = new URLSearchParams({ action: 'chart', symbols: syms.join('~'), window: win, bench });
+    d = await (await fetch('api.php?' + q.toString())).json();
+  } catch (e) { return; }
+
+  const datasets = (d.series || []).map((s, i) => ({
+    label: s.symbol,
+    data: s.points.map(p => ({ x: Date.parse(p[0]), y: p[1] })),
+    borderColor: CHART_PALETTE[i % CHART_PALETTE.length],
+    backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
+    borderWidth: 1.5, pointRadius: 0, tension: 0.1,
+  }));
+  if (d.bench && d.bench.points.length) {
+    datasets.push({
+      label: d.bench.label + ' (benchmark)',
+      data: d.bench.points.map(p => ({ x: Date.parse(p[0]), y: p[1] })),
+      borderColor: '#e6edf3', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 0, tension: 0.1,
+    });
+  }
+  if (overlayChart) overlayChart.destroy();
+  overlayChart = new Chart(cv, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'nearest', intersect: false },
+      scales: {
+        x: { type: 'linear', ticks: { color: '#9aa4b2', maxTicksLimit: 8,
+              callback: v => new Date(v).toLocaleDateString('da-DK', { year: '2-digit', month: 'short' }) },
+             grid: { color: '#1c2330' } },
+        y: { ticks: { color: '#9aa4b2' }, grid: { color: '#1c2330' },
+             title: { display: true, text: 'Base 100', color: '#9aa4b2' } },
+      },
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#cbd3df', boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: {
+          title: items => items.length ? new Date(items[0].parsed.x).toLocaleDateString('da-DK') : '',
+          label: c => `${c.dataset.label}: ${c.parsed.y.toFixed(1)}`,
+        } },
+      },
+    },
+  });
 }
 function fmtCol(col, v) {
   v = +v;

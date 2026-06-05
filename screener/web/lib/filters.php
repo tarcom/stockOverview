@@ -217,3 +217,64 @@ function flt_facets(): array {
     }
     return $out;
 }
+
+// ---------- Grafdata (base-100 tidsserier til udfaldsrum-graferne) ----------
+
+function win_days(string $w): int {
+    return ['1m'=>30,'3m'=>91,'6m'=>182,'1y'=>365,'2y'=>730,'3y'=>1095,'5y'=>1826,'10y'=>3652][$w] ?? 1095;
+}
+
+/** Reducerer en serie til højst $max punkter (jævn sampling, beholder først+sidst). */
+function downsample(array $pts, int $max): array {
+    $n = count($pts);
+    if ($n <= $max) return $pts;
+    $step = $n / $max; $out = [];
+    for ($i = 0; $i < $max; $i++) $out[] = $pts[(int)floor($i * $step)];
+    $out[] = $pts[$n - 1];
+    return $out;
+}
+
+/** Indekserer en serie til base-100 (første punkt = 100). */
+function base100(array $pts): array {
+    if (!$pts) return [];
+    $p0 = $pts[0][1];
+    if ($p0 == 0) return $pts;
+    return array_map(fn($p) => [$p[0], round($p[1] / $p0 * 100, 2)], $pts);
+}
+
+/**
+ * Base-100 tidsserier for de viste aktier + et benchmark-indeks, over et tidsvindue.
+ * Læser rå dagshistorik (kun for de få viste symboler) og downsampler til ~220 punkter.
+ */
+function flt_chart(array $symbols, string $window, string $bench): array {
+    $symbols = array_slice(array_values(array_filter($symbols, fn($s) => $s !== '')), 0, 16);
+    $window  = array_key_exists($window, array_flip(flt_windows())) ? $window : '3y';
+    $cutoff  = (new DateTime('-' . win_days($window) . ' days'))->format('Y-m-d');
+    $out = ['window' => $window, 'series' => [], 'bench' => null];
+
+    if ($symbols) {
+        $ph = implode(',', array_fill(0, count($symbols), '?'));
+        $st = db()->prepare("SELECT symbol, price_date, COALESCE(adj_close, close) p FROM " . t('prices') . "
+            WHERE symbol IN ($ph) AND price_date >= ? AND COALESCE(adj_close, close) IS NOT NULL
+            ORDER BY symbol, price_date");
+        $st->execute(array_merge($symbols, [$cutoff]));
+        $by = [];
+        foreach ($st as $r) $by[$r['symbol']][] = [$r['price_date'], (float)$r['p']];
+        // bevar inputrækkefølge (sorteret som resultaterne)
+        foreach ($symbols as $s) {
+            if (empty($by[$s])) continue;
+            $out['series'][] = ['symbol' => $s, 'points' => base100(downsample($by[$s], 220))];
+        }
+    }
+
+    if (array_key_exists($bench, cfg()['benchmarks'])) {
+        $st = db()->prepare("SELECT price_date, close FROM " . t('indexes') . "
+            WHERE symbol = ? AND price_date >= ? ORDER BY price_date");
+        $st->execute([$bench, $cutoff]);
+        $bp = [];
+        foreach ($st as $r) $bp[] = [$r['price_date'], (float)$r['close']];
+        if ($bp) $out['bench'] = ['symbol' => $bench, 'label' => cfg()['benchmarks'][$bench],
+                                  'points' => base100(downsample($bp, 220))];
+    }
+    return $out;
+}

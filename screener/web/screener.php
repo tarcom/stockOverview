@@ -16,6 +16,7 @@ $sortOpts = [
 <title>StockScreener — Screener</title>
 <link rel="stylesheet" href="assets/style.css">
 <link rel="stylesheet" href="assets/screener.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <header class="topbar">
@@ -77,6 +78,26 @@ $sortOpts = [
       </div>
     </div>
     <div id="funnel" class="funnel"></div>
+
+    <div class="chartbox" id="chartbox">
+      <div class="chart-controls">
+        <strong>Kursudvikling (base-100)</strong>
+        <label>Periode <select id="chartWindow">
+          <?php foreach (['1m','3m','6m','1y','2y','3y','5y','10y'] as $w): ?>
+            <option value="<?= $w ?>"<?= $w==='3y'?' selected':'' ?>><?= strtoupper($w) ?></option>
+          <?php endforeach; ?>
+        </select></label>
+        <label>Benchmark <select id="chartBench">
+          <?php foreach (cfg()['benchmarks'] as $k => $lbl): ?>
+            <option value="<?= htmlspecialchars($k) ?>"<?= $k===cfg()['rs_benchmark']?' selected':'' ?>><?= htmlspecialchars($lbl) ?></option>
+          <?php endforeach; ?>
+          <option value="">(ingen)</option>
+        </select></label>
+        <span class="muted">alle indekseret til 100 ved start · klik i forklaringen for at skjule linjer</span>
+      </div>
+      <div class="chart-canvas-wrap"><canvas id="overlayChart"></canvas></div>
+    </div>
+
     <div id="resultWrap" class="result-wrap"><div class="loading">Indlæser…</div></div>
     <p class="results-note">Bemærk: et aktivt filter udelukker automatisk aktier der mangler den datatype. Grafer kommer i Fase 3.</p>
   </section>
