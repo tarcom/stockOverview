@@ -60,6 +60,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   } catch (e) { $('#resultWrap').innerHTML = '<div class="err">Kunne ikke hente facetter: ' + e + '</div>'; return; }
   buildRanges();
   buildMultis();
+  initFavorites();
   applyStateFromURL();
   const params = new URLSearchParams(location.search); // læs FØR refresh() (som rydder URL'en)
   const ta = params.get('ta'), preset = params.get('preset');
@@ -216,11 +217,12 @@ function renderResults(rows, sort) {
   let h = `<table class="rtable"><thead><tr>
     <th>#</th><th>Symbol</th><th>Navn</th><th>Sektor</th><th>Land</th><th class="num">Mkt cap</th>
     <th class="num hl">${escHtml(sortLbl)}</th><th class="num">Afkast 1Y</th><th class="num">Kvalitet 3Y</th>
-    <th class="num">P/E</th><th class="num">Udbytte</th></tr></thead><tbody>`;
+    <th class="num">P/E</th><th class="num">Udbytte</th><th></th></tr></thead><tbody>`;
   rows.forEach((r, i) => {
-    h += `<tr data-sym="${escAttr(r.symbol)}" class="clickrow">
+    const yurl = 'https://finance.yahoo.com/quote/' + encodeURIComponent(r.symbol);
+    h += `<tr data-sym="${escAttr(r.symbol)}" class="clickrow" title="Klik for teknisk analyse">
       <td class="muted">${i+1}</td>
-      <td class="sym">${escHtml(r.symbol)}</td>
+      <td class="sym"><span class="ta-dot">📈</span> ${escHtml(r.symbol)}</td>
       <td class="nm" title="${escAttr(r.name||'')}">${escHtml(trunc(r.name, 28))}</td>
       <td>${escHtml(r.sector||'–')}</td>
       <td>${escHtml(r.country||'–')}</td>
@@ -230,6 +232,7 @@ function renderResults(rows, sort) {
       <td class="num">${fmtVal(+r.quality_3y, 'num')}</td>
       <td class="num">${fmtVal(+r.trailing_pe, 'num')}</td>
       <td class="num">${fmtVal(+r.dividend_yield, 'pct')}</td>
+      <td class="ylink"><a href="${yurl}" target="_blank" rel="noopener" title="Åbn på Yahoo Finance" onclick="event.stopPropagation()">Y!</a></td>
     </tr>`;
   });
   $('#resultWrap').innerHTML = h + '</tbody></table>';
@@ -344,15 +347,21 @@ function applyPreset(name) {
   clearFilters();
   $$('.preset').forEach(b => b.classList.toggle('on', b.dataset.preset === name));
   for (const [key, rng] of Object.entries(ps.filters || {})) {
-    const el = document.querySelector('.filt[data-key="' + key + '"]'), d = DOMAINS[key];
-    if (!el || !d) continue;
-    if (rng.min != null) $('.r-min', el).value = valToPos(rng.min, d);
-    if (rng.max != null) $('.r-max', el).value = valToPos(rng.max, d);
-    el.classList.add('active');
+    const el = document.querySelector('.filt[data-key="' + key + '"]');
+    if (!el) continue;
     el.closest('.fgroup').classList.add('open');
-    drawHist(el);
-    const lo = posToVal(+$('.r-min', el).value, d), hi = posToVal(+$('.r-max', el).value, d);
-    $('.filt-vals', el).textContent = fmtVal(lo, d.fmt) + ' – ' + fmtVal(hi, d.fmt);
+    if (rng.in) {                                   // multivalg (fx lande)
+      const want = new Set(rng.in);
+      $$('input', el).forEach(i => i.checked = want.has(i.value));
+      el.classList.toggle('active', $$('input:checked', el).length > 0);
+    } else {                                        // range-slider
+      const d = DOMAINS[key]; if (!d) continue;
+      if (rng.min != null) $('.r-min', el).value = valToPos(rng.min, d);
+      if (rng.max != null) $('.r-max', el).value = valToPos(rng.max, d);
+      el.classList.add('active'); drawHist(el);
+      const lo = posToVal(+$('.r-min', el).value, d), hi = posToVal(+$('.r-max', el).value, d);
+      $('.filt-vals', el).textContent = fmtVal(lo, d.fmt) + ' – ' + fmtVal(hi, d.fmt);
+    }
     markGroupActive(el);
   }
   if (ps.sort) $('#sort').value = ps.sort;
@@ -360,6 +369,40 @@ function applyPreset(name) {
   $('#hideJunk').checked = true;
   refresh();
 }
+
+// ---------- favorit-filtre (vises øverst, gemt i localStorage) ----------
+const FAV_KEY = 'screener_favs';
+function getFavs() { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch (e) { return []; } }
+function setFavs(a) { try { localStorage.setItem(FAV_KEY, JSON.stringify(a)); } catch (e) {} }
+
+function initFavorites() {
+  $$('.fav-star').forEach(star => star.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleFav(star.closest('.filt').dataset.key);
+  }));
+  getFavs().forEach(key => moveFilt(key, true));
+  updateFavGroup();
+}
+function toggleFav(key) {
+  let favs = getFavs();
+  const on = !favs.includes(key);
+  favs = on ? [...favs, key] : favs.filter(k => k !== key);
+  setFavs(favs);
+  moveFilt(key, on);
+  updateFavGroup();
+}
+function moveFilt(key, toFav) {
+  const el = document.querySelector('.filt[data-key="' + key + '"]');
+  if (!el) return;
+  el.classList.toggle('is-fav', toFav);
+  const star = $('.fav-star', el); if (star) star.textContent = toFav ? '★' : '☆';
+  const dest = toFav
+    ? $('#favGroup .fgroup-body')
+    : document.querySelector('.fgroup[data-group="' + el.dataset.origin + '"] .fgroup-body');
+  if (dest) dest.appendChild(el);
+  if (!el.classList.contains('multi')) drawHist(el); // canvas-redraw efter flytning
+}
+function updateFavGroup() { $('#favGroup').hidden = $$('#favGroup .filt').length === 0; }
 
 // ---------- util ----------
 function trunc(s, n) { s = s || ''; return s.length > n ? s.slice(0, n-1) + '…' : s; }
@@ -385,6 +428,7 @@ function initTA() {
 async function openStock(sym) {
   const m = $('#stockModal'); m.hidden = false;
   $('.m-sym', m).textContent = sym; $('.m-name', m).textContent = '…';
+  $('.m-yahoo', m).href = 'https://finance.yahoo.com/quote/' + encodeURIComponent(sym);
   try {
     const q = new URLSearchParams({ action: 'stock', symbol: sym, window: $('#taWindow').value });
     TA_DATA = await (await fetch('api.php?' + q.toString())).json();

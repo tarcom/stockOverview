@@ -17,7 +17,12 @@ code { background: #0b0e14; padding: .1em .4em; border-radius: 4px; font-size: .
   background: var(--panel); border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 10;
 }
-.brand { font-weight: 700; font-size: 1.2rem; }
+.brand { display: flex; align-items: center; gap: .6rem; text-decoration: none; }
+.brand:hover { text-decoration: none; }
+.brand .logo { flex-shrink: 0; filter: drop-shadow(0 0 6px rgba(91,141,239,.35)); }
+.brand-name { font-size: 1.18rem; font-weight: 500; color: var(--muted); letter-spacing: -.01em; }
+.brand-name b { font-weight: 800; background: linear-gradient(90deg, #2ec4b6, #5b8def);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
 .topbar nav a { color: var(--muted); margin-right: 1.2rem; font-weight: 500; }
 .topbar nav a.active, .topbar nav a:hover { color: var(--text); text-decoration: none; }
 

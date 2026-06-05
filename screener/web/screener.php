@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/lib/filters.php';
+require __DIR__ . '/lib/header.php';
 $sortOpts = [
   'quality_1y'=>'Kvalitets-score 1Y','quality_3y'=>'Kvalitets-score 3Y',
   'cagr_3y'=>'CAGR 3Y','cagr_1y'=>'CAGR 1Y',
@@ -25,6 +26,11 @@ $presets = [
   'dividend' => ['label'=>'🏦 Udbytte', 'sort'=>'dividend_yield', 'dir'=>'desc',
     'title'=>'Solide udbyttebetalere: yield over 3%, mid/large-cap.',
     'filters'=>['dividend_yield'=>['min'=>0.03],'mkt_cap_usd'=>['min'=>1e9]]],
+  'nordnet' => ['label'=>'🇩🇰 Nordnet-handelbar', 'sort'=>'quality_1y', 'dir'=>'desc',
+    'title'=>'Kun markeder du typisk kan handle via Nordnet: Norden, USA/Canada og Vesteuropa — ingen direkte asiatiske børser.',
+    'filters'=>['mkt_cap_usd'=>['min'=>1e8], 'country'=>['in'=>['Denmark','Sweden','Norway','Finland','Iceland',
+      'United States','Canada','Germany','France','Netherlands','Belgium','Italy','Spain','Portugal','Austria',
+      'Switzerland','United Kingdom','Ireland','Estonia','Latvia','Lithuania','Poland']]]],
 ];
 ?>
 <!doctype html>
@@ -32,16 +38,13 @@ $presets = [
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StockScreener — Screener</title>
+<title>Nørgaard's Aktie Screener</title>
 <link rel="stylesheet" href="assets/style.css?v=<?= filemtime(__DIR__ . '/assets/style.css') ?>">
 <link rel="stylesheet" href="assets/screener.css?v=<?= filemtime(__DIR__ . '/assets/screener.css') ?>">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-<header class="topbar">
-  <div class="brand">📈 StockScreener</div>
-  <nav><a href="index.php">Universet</a><a href="screener.php" class="active">Screener</a><a href="index.php#plan">Plan &amp; status</a></nav>
-</header>
+<?php render_header('screener'); ?>
 
 <main class="screener">
   <aside class="filters" id="filters">
@@ -53,6 +56,11 @@ $presets = [
       Skjul mistænkte datafejl
       <span class="info" title="Skjuler aktier med &gt;100% kursudsving på én dag — næsten altid korrupt Yahoo-data. Slå fra for at se alt.">i</span></label>
 
+    <section class="fgroup open favgroup" id="favGroup" data-group="fav" hidden>
+      <h3 class="fgroup-h"><span class="caret">▸</span> ⭐ Favoritter <span class="grp-active"></span></h3>
+      <div class="fgroup-body"></div>
+    </section>
+
     <?php foreach (flt_groups() as $g): ?>
       <section class="fgroup<?= $g['open'] ? ' open' : '' ?>" data-group="<?= $g['id'] ?>">
         <h3 class="fgroup-h"><span class="caret">▸</span> <?= htmlspecialchars($g['title']) ?>
@@ -60,8 +68,9 @@ $presets = [
         <div class="fgroup-body">
           <?php foreach ($g['filters'] as $f): ?>
             <?php if ($f['type'] === 'range'): ?>
-              <div class="filt" data-key="<?= $f['key'] ?>" data-fmt="<?= $f['fmt'] ?>" data-scale="<?= $f['scale'] ?>">
-                <div class="filt-label"><?= htmlspecialchars($f['label']) ?>
+              <div class="filt" data-key="<?= $f['key'] ?>" data-origin="<?= $g['id'] ?>" data-fmt="<?= $f['fmt'] ?>" data-scale="<?= $f['scale'] ?>">
+                <div class="filt-label"><span class="fav-star" title="Vis øverst som favorit">☆</span>
+                  <?= htmlspecialchars($f['label']) ?>
                   <span class="info" title="<?= htmlspecialchars($f['info']) ?>">i</span>
                   <span class="filt-vals"></span></div>
                 <div class="slider">
@@ -72,8 +81,9 @@ $presets = [
                 </div>
               </div>
             <?php else: ?>
-              <div class="filt multi" data-key="<?= $f['key'] ?>">
-                <div class="filt-label"><?= htmlspecialchars($f['label']) ?>
+              <div class="filt multi" data-key="<?= $f['key'] ?>" data-origin="<?= $g['id'] ?>">
+                <div class="filt-label"><span class="fav-star" title="Vis øverst som favorit">☆</span>
+                  <?= htmlspecialchars($f['label']) ?>
                   <span class="info" title="<?= htmlspecialchars($f['info']) ?>">i</span></div>
                 <div class="multi-opts"></div>
               </div>
@@ -133,7 +143,10 @@ $presets = [
   <div class="modal-card">
     <div class="modal-head">
       <div class="m-title"><span class="m-sym"></span> <span class="m-name muted"></span></div>
-      <button id="modalClose" class="btn-ghost" title="Luk">✕</button>
+      <div class="m-actions">
+        <a class="m-yahoo btn-ghost" target="_blank" rel="noopener" title="Åbn på Yahoo Finance">Yahoo ↗</a>
+        <button id="modalClose" class="btn-ghost" title="Luk (Esc)">✕</button>
+      </div>
     </div>
     <div class="modal-sub muted"></div>
     <div class="ta-controls">

@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/lib/stats.php';
 require __DIR__ . '/lib/markdown.php';
+require __DIR__ . '/lib/header.php';
 
 $planHtml = is_file(__DIR__ . '/../PLAN.md')
     ? render_markdown(file_get_contents(__DIR__ . '/../PLAN.md')) : '';
@@ -21,15 +22,12 @@ if ($ready) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StockScreener — Universet</title>
+<title>Nørgaard's Aktie Screener — Universet</title>
 <link rel="stylesheet" href="assets/style.css?v=<?= filemtime(__DIR__ . '/assets/style.css') ?>">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-<header class="topbar">
-  <div class="brand">📈 StockScreener</div>
-  <nav><a href="index.php" class="active">Universet</a><a href="screener.php">Screener</a><a href="#plan">Plan &amp; status</a></nav>
-</header>
+<?php render_header('universe'); ?>
 
 <?php if (!$ready): ?>
   <main class="wrap">
