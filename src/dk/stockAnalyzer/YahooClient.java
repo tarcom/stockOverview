@@ -55,6 +55,14 @@ public class YahooClient {
     public  static volatile long currentDelayMs = 60;
     private static final AtomicInteger consecutiveSuccesses = new AtomicInteger(0);
 
+    // Dyb cooldown: ved vedvarende 429 på max-delay hjælper det IKKE at blive ved med at poke
+    // Yahoo hver 4s — det holder bare penalty-vinduet i live. Pauser i stedet helt, så vinduet
+    // kan klinge af (samme idé som den gamle scrapers 10-min ACCESS DENIED-pause).
+    private static final int  MAX_HITS_BEFORE_COOLDOWN = 8;
+    private static final long DEEP_COOLDOWN_MS = 300_000; // 5 min
+    private static final AtomicInteger maxHits = new AtomicInteger(0);
+    private static volatile long cooldownUntil = 0;
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static String cookie;
@@ -149,12 +157,15 @@ public class YahooClient {
     // ------------------------------------------- HTTP m. adaptiv rate + backoff
 
     private static synchronized void throttle() {
-        long wait = currentDelayMs - (System.currentTimeMillis() - lastRequestTime);
+        long now = System.currentTimeMillis();
+        if (now < cooldownUntil) { sleep(cooldownUntil - now); now = System.currentTimeMillis(); }
+        long wait = currentDelayMs - (now - lastRequestTime);
         if (wait > 0) sleep(wait);
         lastRequestTime = System.currentTimeMillis();
     }
 
     private static synchronized void onSuccess() {
+        maxHits.set(0);
         int s = consecutiveSuccesses.incrementAndGet();
         if (s >= SUCCESSES_BEFORE_SPEEDUP) {
             consecutiveSuccesses.set(0);
@@ -171,6 +182,14 @@ public class YahooClient {
         long prev = currentDelayMs;
         currentDelayMs = Math.min(MAX_DELAY_MS, currentDelayMs * 2);
         System.out.printf("  [rate] ↓ 429: %dms → %dms/slot%n", prev, currentDelayMs);
+        // Vedvarende 429 på max-delay → dyb cooldown så Yahoos rate-vindue kan klinge af,
+        // i stedet for at blive ved med at poke hver 4s (hvilket holder penalty'en i live).
+        if (currentDelayMs >= MAX_DELAY_MS && maxHits.incrementAndGet() >= MAX_HITS_BEFORE_COOLDOWN) {
+            maxHits.set(0);
+            cooldownUntil = System.currentTimeMillis() + DEEP_COOLDOWN_MS;
+            currentDelayMs = 1000; // efter cooldown: prøv forsigtigt igen frem for at blive på max
+            System.out.printf("  [rate] ⏸ vedvarende 429 ved max — dyb cooldown i %d min%n", DEEP_COOLDOWN_MS / 60000);
+        }
     }
 
     private static JsonNode getJson(String urlStr) throws IOException {
