@@ -9,7 +9,6 @@ if ($ready) {
     $sectors  = stat_breakdown('sector');
     $countries= stat_breakdown('country');
     $industries = stat_breakdown('industry', 12);
-    $types    = stat_breakdown('quote_type', 8);
     $hist     = stat_history_buckets();
 }
 ?>
@@ -67,8 +66,7 @@ if ($ready) {
     <div class="card"><h3>Sektorer</h3><canvas id="cSector"></canvas></div>
     <div class="card"><h3>Lande (top 15)</h3><canvas id="cCountry"></canvas></div>
     <div class="card"><h3>Industrier (top 12)</h3><canvas id="cIndustry"></canvas></div>
-    <div class="card half"><h3>Type</h3><canvas id="cType"></canvas></div>
-    <div class="card half"><h3>Datakvalitet — historik-længde</h3><canvas id="cHist"></canvas></div>
+    <div class="card"><h3>Datakvalitet — historik-længde</h3><canvas id="cHist"></canvas></div>
   </section>
 
 </main>
@@ -92,7 +90,6 @@ function donut(id, rows) {
 bar('cSector', <?= json_encode($sectors) ?>, 'Selskaber');
 bar('cCountry', <?= json_encode($countries) ?>, 'Selskaber');
 bar('cIndustry', <?= json_encode($industries) ?>, 'Selskaber');
-donut('cType', <?= json_encode($types) ?>);
 bar('cHist', <?= json_encode($hist) ?>, 'Aktier');
 </script>
 <?php endif; ?>

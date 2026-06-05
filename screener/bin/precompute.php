@@ -54,8 +54,10 @@ foreach ($st as $r) $spx[$r['price_date']] = (float)$r['close'];
 if (!$spx) { fwrite(STDERR, "ADVARSEL: ingen $benchSym-data — kør bin/fetch_benchmarks.php først.\n"); }
 
 // --- Symboler at behandle ---
+// Kun aktier (EQUITY) — ingen fonde/ETF/indeks i screeneren.
 $sql = "SELECT symbol,name,exchange,currency,quote_type,sector,industry,country,employees
-        FROM " . t('securities') . " ORDER BY symbol" . ($LIMIT > 0 ? " LIMIT $LIMIT" : "");
+        FROM " . t('securities') . " WHERE quote_type = 'EQUITY'
+        ORDER BY symbol" . ($LIMIT > 0 ? " LIMIT $LIMIT" : "");
 $symbols = $pdo->query($sql)->fetchAll();
 $total = count($symbols);
 echo "Precompute: $total aktier" . ($LIMIT ? " (limit)" : "") . ", " . count($spx) . " SPX-punkter.\n";

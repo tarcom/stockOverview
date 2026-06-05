@@ -81,7 +81,6 @@ function flt_groups(): array {
       ['id'=>'class','title'=>'Klassifikation','open'=>false,'filters'=>[
         fm('sector','Sektor','Virksomhedens sektor.'),
         fm('country','Land','Virksomhedens hjemland.'),
-        fm('quote_type','Type','Aktie / ETF / fond / indeks.'),
       ]],
     ];
 }
