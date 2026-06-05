@@ -59,8 +59,8 @@ function flt_groups(): array {
       ['id'=>'risk','title'=>'Stabilitet & risiko','open'=>false,'filters'=>$risk],
       ['id'=>'mktcorr','title'=>'Marked-korrelation','open'=>false,'filters'=>$mkt],
       ['id'=>'value','title'=>'Værdiansættelse','open'=>false,'filters'=>[
-        f('trailing_pe','P/E (trailing)','lin','num','Kurs ÷ indtjening seneste 12 mdr.'),
-        f('forward_pe','P/E (forward)','lin','num','Kurs ÷ forventet indtjening.'),
+        f('trailing_pe','P/E','lin','num','Den almindelige P/E: kurs ÷ indtjening de seneste 12 måneder. Selskaber med negativ eller meningsløs indtjening (P/E ≤ 0 eller > 1000) vises som N/A, ikke som et tal.'),
+        f('forward_pe','Forward P/E','lin','num','Kurs ÷ forventet fremtidig indtjening (analytikernes estimat).'),
         f('peg_ratio','PEG','lin','num','P/E ÷ vækst. Under 1 anses ofte som attraktivt.'),
         f('price_to_book','P/B','lin','num','Kurs ÷ bogført egenkapital.'),
         f('price_to_sales','P/S','lin','num','Kurs ÷ omsætning.'),

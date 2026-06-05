@@ -18,7 +18,7 @@ function stat_headline(): array {
         SUM(quality_1y IS NOT NULL) with_metrics,
         SUM(mkt_cap_usd IS NOT NULL) with_cap,
         SUM(trailing_pe IS NOT NULL) with_pe,
-        ROUND(SUM(mkt_cap_usd)/1e12,2) total_cap_t,
+        SUM(mkt_cap_usd > 1e9) large_caps,
         MIN(first_date) earliest, MAX(last_date) latest,
         SUM(max_day_move > 1.0) suspect_data
         FROM " . t('screener'))->fetch();
@@ -54,14 +54,17 @@ function stat_runs(): array {
 function stat_breakdown(string $field, int $limit = 15): array {
     $allowed = ['sector', 'industry', 'country', 'quote_type', 'currency', 'exchange'];
     if (!in_array($field, $allowed, true)) return [];
-    $sql = "SELECT COALESCE(NULLIF($field,''),'(ukendt)') label, COUNT(*) n, ROUND(SUM(mkt_cap_usd)/1e9,1) cap_b
-            FROM " . t('screener') . " GROUP BY label ORDER BY n DESC LIMIT $limit";
+    // Udelad ukendte/tomme (mest fonde/indeks + aktier uden profil) så graferne viser
+    // den reelle fordeling i stedet for en stor "(ukendt)"-klump.
+    $sql = "SELECT $field label, COUNT(*) n, ROUND(SUM(mkt_cap_usd)/1e9,1) cap_b
+            FROM " . t('screener') . " WHERE $field IS NOT NULL AND $field <> ''
+            GROUP BY label ORDER BY n DESC LIMIT $limit";
     return db()->query($sql)->fetchAll();
 }
 
 /** Histogram over historik-længde (datakvalitet). */
 function stat_history_buckets(): array {
-    $sql = "SELECT bucket, COUNT(*) n FROM (
+    $sql = "SELECT bucket AS label, COUNT(*) n FROM (
         SELECT CASE
             WHEN history_years >= 9.5 THEN '10 år'
             WHEN history_years >= 5 THEN '5-10 år'

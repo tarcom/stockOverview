@@ -38,7 +38,7 @@ if ($ready) {
   <section class="kpis">
     <div class="kpi"><div class="kpi-num"><?= fmt_int($h['total']) ?></div><div class="kpi-lbl">aktier i screeneren</div></div>
     <div class="kpi"><div class="kpi-num"><?= fmt_int($h['with_metrics']) ?></div><div class="kpi-lbl">med beregnede metrics</div></div>
-    <div class="kpi"><div class="kpi-num">$<?= number_format((float)$h['total_cap_t'],1,',','.') ?> bio</div><div class="kpi-lbl">samlet markedsværdi (USD)</div></div>
+    <div class="kpi"><div class="kpi-num"><?= fmt_int($h['large_caps']) ?></div><div class="kpi-lbl">store selskaber (&gt; $1 mia.)</div></div>
     <div class="kpi"><div class="kpi-num">≈<?= fmt_int($h['price_rows']) ?></div><div class="kpi-lbl">kurspunkter i DB (estimat)</div></div>
     <div class="kpi"><div class="kpi-num"><?= $h['earliest'] ?> → <?= $h['latest'] ?></div><div class="kpi-lbl">dato-spænd</div></div>
     <div class="kpi <?= $h['suspect_data']>0?'warn':'' ?>"><div class="kpi-num"><?= fmt_int($h['suspect_data']) ?></div><div class="kpi-lbl">mistænkt datakvalitet (&gt;100%/dag)</div></div>

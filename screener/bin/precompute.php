@@ -122,6 +122,9 @@ function buildRow($sym, $sec, $series, $fund, $spx, $fx, $WINDOWS, $METRICS, $FU
     $row['mkt_cap_usd'] = ($cap !== null && $rate !== null) ? $cap * $rate : ($cap !== null && $sec['currency']==='USD' ? $cap : null);
 
     foreach ($FUND as $f) $row[$f] = isset($fund[$f]) && $fund[$f] !== null ? (float)$fund[$f] : null;
+    // Ryd meningsløse P/E-værdier: ≤0 = negativ indtjening, >1000 = nær-nul indtjening → N/A.
+    foreach (['trailing_pe','forward_pe'] as $pe)
+        if ($row[$pe] !== null && ($row[$pe] <= 0 || $row[$pe] > 1000)) $row[$pe] = null;
 
     // Per-vindue metrics
     foreach ($METRICS as $m) foreach (array_keys($WINDOWS) as $w) $row["{$m}_{$w}"] = null;
