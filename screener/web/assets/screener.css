@@ -145,3 +145,11 @@
 .ta-main { position: relative; height: 380px; }
 .ta-pane { position: relative; height: 170px; margin-top: .8rem; }
 @media (max-width: 700px) { .ta-main { height: 280px; } .ta-pane { height: 140px; } }
+
+/* Strategi-presets */
+.presets { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.presets-lbl { color: var(--muted); font-size: .85rem; margin-right: .2rem; }
+.preset { background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 20px; padding: .4rem .9rem; cursor: pointer; font-size: .85rem; white-space: nowrap; }
+.preset:hover { border-color: var(--accent); }
+.preset.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }

@@ -7,6 +7,25 @@ $sortOpts = [
   'rs_1y'=>'Relativ styrke 1Y','sharpe_1y'=>'Sharpe 1Y','trend_r2_3y'=>'Trend-stabilitet 3Y',
   'mkt_cap_usd'=>'Markedsværdi','dividend_yield'=>'Udbytte %','return_on_equity'=>'ROE',
 ];
+// Strategi-presets: ét klik sætter en hel filter-opskrift + sortering.
+// (pct-værdier er brøker: 0.15 = 15%. maxdd er negativ. debt_to_equity er Yahoos %-tal.)
+$presets = [
+  'compounder' => ['label'=>'📈 Stabil compounder', 'sort'=>'quality_3y', 'dir'=>'desc',
+    'title'=>'Jævn, vedvarende vækst: høj trend-stabilitet (R²>0.85), positiv 3-års CAGR, begrænset drawdown, mid/large-cap.',
+    'filters'=>['trend_r2_3y'=>['min'=>0.85],'cagr_3y'=>['min'=>0.10],'maxdd_3y'=>['min'=>-0.45],'mkt_cap_usd'=>['min'=>1e9],'history_years'=>['min'=>5]]],
+  'momentum' => ['label'=>'🚀 Momentum', 'sort'=>'quality_1y', 'dir'=>'desc',
+    'title'=>'Stærk nylig stigning: 6M >20% og 1Y >30%, sorteret efter kvalitets-score.',
+    'filters'=>['ret_6m'=>['min'=>0.20],'ret_1y'=>['min'=>0.30],'mkt_cap_usd'=>['min'=>3e8]]],
+  'value' => ['label'=>'💰 Value', 'sort'=>'trailing_pe', 'dir'=>'asc',
+    'title'=>'Billig prissætning: P/E under 15, P/B under 2, positiv ROE, mid/large-cap.',
+    'filters'=>['trailing_pe'=>['min'=>0,'max'=>15],'price_to_book'=>['max'=>2],'return_on_equity'=>['min'=>0.08],'mkt_cap_usd'=>['min'=>1e9]]],
+  'quality' => ['label'=>'⭐ Kvalitet', 'sort'=>'return_on_equity', 'dir'=>'desc',
+    'title'=>'Buffett-stil: høj forrentning (ROE>15%), lav gæld, gode driftsmarginer.',
+    'filters'=>['return_on_equity'=>['min'=>0.15],'debt_to_equity'=>['max'=>80],'operating_margins'=>['min'=>0.15],'mkt_cap_usd'=>['min'=>1e9]]],
+  'dividend' => ['label'=>'🏦 Udbytte', 'sort'=>'dividend_yield', 'dir'=>'desc',
+    'title'=>'Solide udbyttebetalere: yield over 3%, mid/large-cap.',
+    'filters'=>['dividend_yield'=>['min'=>0.03],'mkt_cap_usd'=>['min'=>1e9]]],
+];
 ?>
 <!doctype html>
 <html lang="da">
@@ -66,6 +85,13 @@ $sortOpts = [
   </aside>
 
   <section class="results">
+    <div class="presets">
+      <span class="presets-lbl">Strategier:</span>
+      <?php foreach ($presets as $k => $ps): ?>
+        <button class="preset" data-preset="<?= $k ?>" title="<?= htmlspecialchars($ps['title']) ?>"><?= htmlspecialchars($ps['label']) ?></button>
+      <?php endforeach; ?>
+      <span class="info" title="Et preset nulstiller filtrene og sætter en hel opskrift. Du kan finjustere bagefter.">i</span>
+    </div>
     <div class="results-head">
       <div class="count-box"><span id="count">…</span> <span class="muted">/ <span id="total">…</span> aktier matcher</span></div>
       <div class="controls">
@@ -136,7 +162,7 @@ $sortOpts = [
   </div>
 </div>
 
-<script>window.SORT_OPTS = <?= json_encode($sortOpts) ?>;</script>
+<script>window.SORT_OPTS = <?= json_encode($sortOpts) ?>; window.PRESETS = <?= json_encode($presets) ?>;</script>
 <script src="assets/screener.js?v=<?= filemtime(__DIR__ . '/assets/screener.js') ?>"></script>
 </body>
 </html>

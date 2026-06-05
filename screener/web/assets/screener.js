@@ -61,8 +61,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   buildRanges();
   buildMultis();
   applyStateFromURL();
-  const ta = new URLSearchParams(location.search).get('ta'); // læs FØR refresh() (som rydder URL'en)
-  refresh();
+  const params = new URLSearchParams(location.search); // læs FØR refresh() (som rydder URL'en)
+  const ta = params.get('ta'), preset = params.get('preset');
+  if (preset && (window.PRESETS || {})[preset]) applyPreset(preset); // deep-link til preset
+  else refresh();
   if (ta) openStock(ta); // deep-link til teknisk analyse
 });
 
@@ -82,6 +84,7 @@ function wireControls() {
   $('#chartWindow').addEventListener('change', loadChart);
   $('#chartBench').addEventListener('change', loadChart);
   $('#resetBtn').addEventListener('click', resetAll);
+  $$('.preset').forEach(b => b.addEventListener('click', () => applyPreset(b.dataset.preset)));
   $('#shareBtn').addEventListener('click', () => {
     navigator.clipboard.writeText(location.href).then(() => {
       const b = $('#shareBtn'); const t = b.textContent; b.textContent = '✓ Kopieret'; setTimeout(() => b.textContent = t, 1200);
@@ -324,12 +327,36 @@ function applyStateFromURL() {
     if (set.size) { el.classList.add('active'); markGroupActive(el); }
   });
 }
-function resetAll() {
+function clearFilters() {
   $$('.filt:not(.multi)').forEach(el => { $('.r-min', el).value = 0; $('.r-max', el).value = 1000; el.classList.remove('active'); drawHist(el);
     const d = DOMAINS[el.dataset.key]; if (d) $('.filt-vals', el).textContent = fmtVal(d.min, d.fmt) + ' – ' + fmtVal(d.max, d.fmt); });
   $$('.filt.multi input:checked').forEach(i => i.checked = false);
   $$('.filt.multi').forEach(el => el.classList.remove('active'));
   $$('.grp-active').forEach(s => s.textContent = '');
+  $('#hideJunk').checked = true;
+}
+function resetAll() { clearFilters(); $$('.preset').forEach(b => b.classList.remove('on')); refresh(); }
+
+// ---------- strategi-presets ----------
+function applyPreset(name) {
+  const ps = (window.PRESETS || {})[name];
+  if (!ps) return;
+  clearFilters();
+  $$('.preset').forEach(b => b.classList.toggle('on', b.dataset.preset === name));
+  for (const [key, rng] of Object.entries(ps.filters || {})) {
+    const el = document.querySelector('.filt[data-key="' + key + '"]'), d = DOMAINS[key];
+    if (!el || !d) continue;
+    if (rng.min != null) $('.r-min', el).value = valToPos(rng.min, d);
+    if (rng.max != null) $('.r-max', el).value = valToPos(rng.max, d);
+    el.classList.add('active');
+    el.closest('.fgroup').classList.add('open');
+    drawHist(el);
+    const lo = posToVal(+$('.r-min', el).value, d), hi = posToVal(+$('.r-max', el).value, d);
+    $('.filt-vals', el).textContent = fmtVal(lo, d.fmt) + ' – ' + fmtVal(hi, d.fmt);
+    markGroupActive(el);
+  }
+  if (ps.sort) $('#sort').value = ps.sort;
+  if (ps.dir) { $('#dirBtn').dataset.dir = ps.dir; $('#dirBtn').textContent = ps.dir === 'asc' ? '▲ Lavest' : '▼ Højest'; }
   $('#hideJunk').checked = true;
   refresh();
 }

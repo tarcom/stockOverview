@@ -56,7 +56,11 @@ Plus datakvalitet: `history_years`, `max_day_move` (luger korrupt Yahoo-data fra
   - [x] Top-N tabel med sortering
   - [x] **Overlay base-100 graf** af de viste aktier + **benchmark-overlay** (S&P500/NASDAQ/Dow), valgbart tidsinterval (1M…10Y), klikbar forklaring
   - [x] **Enkelt-aktie fokus-view** (klik på række): base-100 kursgraf med **SMA 20/50/100/200** + benchmark-overlay, og sub-pane med **RSI / MACD / volumen** — alt med mouse-over-forklaringer (`api.php?action=stock`, indikatorer beregnes klientside)
-- [ ] **Fase 4 — presets, sammenligning, polish**: strategi-presets ("Stabil compounder", "Value", "Momentum" …), base-100 multi-sammenligning
+- [x] **Fase 4 — strategi-presets** ✅
+  - [x] Ét-klik presets: 📈 Stabil compounder · 🚀 Momentum · 💰 Value · ⭐ Kvalitet · 🏦 Udbytte (nulstiller + sætter hel filter-opskrift + sortering, kan finjusteres bagefter)
+  - [x] `?preset=NAVN` deep-link; aktiv preset fremhæves
+  - [x] Multi-sammenligning dækkes af overlay base-100-grafen (de viste aktier på én graf)
+  - [ ] (Polish-backlog) vælg specifikke rækker til sammenligning; aktiv-filter-chips
 
 ## TODO / backlog (bygges i mindre bidder)
 
