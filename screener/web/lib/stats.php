@@ -22,10 +22,19 @@ function stat_headline(): array {
         MIN(first_date) earliest, MAX(last_date) latest,
         SUM(max_day_move > 1.0) suspect_data
         FROM " . t('screener'))->fetch();
-    // Rå univers (fra ingesten)
+    // Rå univers (fra ingesten). prices har 100M+ rækker → COUNT(*) ville fuldscanne
+    // (30s+). Brug InnoDB's øjeblikkelige rækkeestimat fra information_schema i stedet.
     $sec = (int)$pdo->query("SELECT COUNT(*) FROM " . t('securities'))->fetchColumn();
-    $px  = (int)$pdo->query("SELECT COUNT(*) FROM " . t('prices'))->fetchColumn();
+    $px  = approx_rows(t('prices'));
     return array_merge($s, ['securities' => $sec, 'price_rows' => $px]);
+}
+
+/** Øjeblikkeligt (ca.) rækkeantal fra InnoDB-statistik — undgår dyrt COUNT(*) på kæmpe-tabeller. */
+function approx_rows(string $table): int {
+    $st = db()->prepare("SELECT table_rows FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = ?");
+    $st->execute([$table]);
+    return (int)$st->fetchColumn();
 }
 
 /** Status på seneste kørsler. */
