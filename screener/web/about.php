@@ -1,4 +1,7 @@
-<?php require __DIR__ . '/lib/header.php'; ?>
+<?php
+require __DIR__ . '/lib/header.php';
+require __DIR__ . '/lib/filters.php';   // samme kilde som filter-tooltipsene (flt_groups → 'info')
+?>
 <!doctype html>
 <html lang="da">
 <head>
@@ -32,17 +35,17 @@
   <em>og</em> jævnt — og straffer kaotiske kursforløb. En aktie der fordobles i et hak får lav score; en der
   stiger som efter en lineal får høj.</p>
 
-  <h2>Nøgletal i screeneren</h2>
-  <table>
-    <tr><th>Mål</th><th>Betydning</th></tr>
-    <tr><td>Afkast / CAGR</td><td>Samlet og annualiseret kursafkast pr. periode (1M–10Y).</td></tr>
-    <tr><td>Trend-stabilitet (R²)</td><td>Hvor jævnt aktien følger sin vækstkurve.</td></tr>
-    <tr><td>Volatilitet · Max drawdown · Sharpe</td><td>Udsving, værste fald, og afkast pr. risiko-enhed.</td></tr>
-    <tr><td>Beta · Markeds-korrelation²</td><td>Følsomhed og samvariation med det brede marked (S&amp;P 500).</td></tr>
-    <tr><td>Relativ styrke</td><td>Merafkast i forhold til markedet.</td></tr>
-    <tr><td>Værdiansættelse</td><td>P/E, P/B, P/S, EV/EBITDA, PEG, udbytte.</td></tr>
-    <tr><td>Kvalitet &amp; sundhed</td><td>ROE, ROA, marginer, gæld/egenkapital, vækst.</td></tr>
-  </table>
+  <h2>Alle filtre forklaret</h2>
+  <p>Hvert filter på <a href="screener.php">Screener</a>-siden har en lille <span class="info-inline">i</span>
+  med samme forklaring du ser her — teksterne kommer fra ét fælles sted, så de aldrig er i utakt.</p>
+  <?php foreach (flt_groups() as $g): ?>
+    <h3><?= htmlspecialchars($g['title']) ?></h3>
+    <table class="filter-help">
+      <?php foreach ($g['filters'] as $f): ?>
+        <tr><th><?= htmlspecialchars($f['label']) ?></th><td><?= htmlspecialchars($f['info']) ?></td></tr>
+      <?php endforeach; ?>
+    </table>
+  <?php endforeach; ?>
 
   <h2>Data &amp; opdatering</h2>
   <p>Screeneren bygger på <strong>markedsdata fra offentlige finansielle datakilder</strong>: op til 10 års

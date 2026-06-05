@@ -91,3 +91,10 @@ code { background: #0b0e14; padding: .1em .4em; border-radius: 4px; font-size: .
 .about th { background: var(--panel2); }
 .about .note { background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--warn);
   border-radius: 8px; padding: 1rem 1.2rem; margin: 1.5rem 0; font-size: .92rem; }
+
+/* Om-side: filter-forklaringer */
+.about h3 { font-size: 1rem; color: var(--accent); margin: 1.4rem 0 .4rem; }
+.about .filter-help { margin: 0 0 .6rem; }
+.about .filter-help th { width: 240px; white-space: nowrap; font-weight: 600; vertical-align: top; }
+.info-inline { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px;
+  border-radius: 50%; background: var(--panel2); border: 1px solid var(--border); color: var(--muted); font-size: 10px; }
