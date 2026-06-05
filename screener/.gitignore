@@ -1,0 +1,7 @@
+# DB-credentials — må aldrig committes
+config/config.php
+
+# PHP / editor
+*.log
+.DS_Store
+/vendor/
