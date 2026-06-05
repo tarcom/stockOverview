@@ -61,7 +61,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   buildRanges();
   buildMultis();
   applyStateFromURL();
+  const ta = new URLSearchParams(location.search).get('ta'); // læs FØR refresh() (som rydder URL'en)
   refresh();
+  if (ta) openStock(ta); // deep-link til teknisk analyse
 });
 
 function wireGroups() {

@@ -14,8 +14,8 @@ $sortOpts = [
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>StockScreener — Screener</title>
-<link rel="stylesheet" href="assets/style.css">
-<link rel="stylesheet" href="assets/screener.css">
+<link rel="stylesheet" href="assets/style.css?v=<?= filemtime(__DIR__ . '/assets/style.css') ?>">
+<link rel="stylesheet" href="assets/screener.css?v=<?= filemtime(__DIR__ . '/assets/screener.css') ?>">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -137,6 +137,6 @@ $sortOpts = [
 </div>
 
 <script>window.SORT_OPTS = <?= json_encode($sortOpts) ?>;</script>
-<script src="assets/screener.js"></script>
+<script src="assets/screener.js?v=<?= filemtime(__DIR__ . '/assets/screener.js') ?>"></script>
 </body>
 </html>
