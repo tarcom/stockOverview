@@ -5,3 +5,7 @@ config/config.php
 *.log
 .DS_Store
 /vendor/
+
+# aogj-migrering: secrets (kun FTP-deployet)
+deploy/ingest.php
+deploy/push-config.php
