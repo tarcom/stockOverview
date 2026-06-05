@@ -99,9 +99,42 @@ $sortOpts = [
     </div>
 
     <div id="resultWrap" class="result-wrap"><div class="loading">Indlæser…</div></div>
-    <p class="results-note">Bemærk: et aktivt filter udelukker automatisk aktier der mangler den datatype. Grafer kommer i Fase 3.</p>
+    <p class="results-note">Bemærk: et aktivt filter udelukker automatisk aktier der mangler den datatype. Klik en række for teknisk analyse.</p>
   </section>
 </main>
+
+<div id="stockModal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <div class="m-title"><span class="m-sym"></span> <span class="m-name muted"></span></div>
+      <button id="modalClose" class="btn-ghost" title="Luk">✕</button>
+    </div>
+    <div class="modal-sub muted"></div>
+    <div class="ta-controls">
+      <label>Periode <select id="taWindow">
+        <?php foreach (['6m','1y','2y','3y','5y','10y'] as $w): ?>
+          <option value="<?= $w ?>"<?= $w==='2y'?' selected':'' ?>><?= strtoupper($w) ?></option>
+        <?php endforeach; ?>
+      </select></label>
+      <span class="ta-smas">SMA
+        <label><input type="checkbox" data-sma="20"> 20</label>
+        <label><input type="checkbox" data-sma="50" checked> 50</label>
+        <label><input type="checkbox" data-sma="100"> 100</label>
+        <label><input type="checkbox" data-sma="200" checked> 200</label>
+        <span class="info" title="Simpelt glidende gennemsnit (Simple Moving Average) over N dage. Udjævner kursen og viser trenden — når kursen er over SMA200 er den langsigtede trend op.">i</span>
+      </span>
+      <label><input type="checkbox" id="taBench" checked> S&P500-overlay</label>
+      <span>Nederste panel <select id="taSub">
+        <option value="rsi">RSI (14)</option>
+        <option value="macd">MACD</option>
+        <option value="vol">Volumen</option>
+      </select>
+      <span class="info" title="RSI: momentum 0-100 (>70 overkøbt, <30 oversolgt). MACD: forskel mellem 12- og 26-dages EMA + signallinje — krydsninger antyder trendskift. Volumen: handelsmængde pr. dag.">i</span></span>
+    </div>
+    <div class="ta-main"><canvas id="taPrice"></canvas></div>
+    <div class="ta-pane"><canvas id="taSubChart"></canvas></div>
+  </div>
+</div>
 
 <script>window.SORT_OPTS = <?= json_encode($sortOpts) ?>;</script>
 <script src="assets/screener.js"></script>

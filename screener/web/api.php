@@ -22,6 +22,10 @@ try {
         echo json_encode(flt_chart($syms, $win, $bench));
         exit;
     }
+    if ($action === 'stock') {
+        echo json_encode(flt_stock($_GET['symbol'] ?? '', $_GET['window'] ?? '3y'));
+        exit;
+    }
     // query
     $sort  = $_GET['sort'] ?? 'quality_1y';
     $dir   = $_GET['dir'] ?? 'desc';

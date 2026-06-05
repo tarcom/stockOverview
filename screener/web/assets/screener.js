@@ -54,6 +54,7 @@ function valToPos(val, d) {
 window.addEventListener('DOMContentLoaded', async () => {
   wireGroups();
   wireControls();
+  initTA();
   try {
     FACETS = await (await fetch('api.php?action=facets')).json();
   } catch (e) { $('#resultWrap').innerHTML = '<div class="err">Kunne ikke hente facetter: ' + e + '</div>'; return; }
@@ -212,7 +213,7 @@ function renderResults(rows, sort) {
     <th class="num hl">${escHtml(sortLbl)}</th><th class="num">Afkast 1Y</th><th class="num">Kvalitet 3Y</th>
     <th class="num">P/E</th><th class="num">Udbytte</th></tr></thead><tbody>`;
   rows.forEach((r, i) => {
-    h += `<tr>
+    h += `<tr data-sym="${escAttr(r.symbol)}" class="clickrow">
       <td class="muted">${i+1}</td>
       <td class="sym">${escHtml(r.symbol)}</td>
       <td class="nm" title="${escAttr(r.name||'')}">${escHtml(trunc(r.name, 28))}</td>
@@ -335,3 +336,117 @@ function resetAll() {
 function trunc(s, n) { s = s || ''; return s.length > n ? s.slice(0, n-1) + '…' : s; }
 function escHtml(s) { return String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function escAttr(s) { return String(s ?? '').replace(/"/g, '&quot;').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+// ============ Teknisk analyse (fokus-view ved klik på række) ============
+let taPriceChart = null, taSubChart = null, TA_DATA = null;
+
+function initTA() {
+  $('#resultWrap').addEventListener('click', e => {
+    const tr = e.target.closest('.clickrow'); if (tr) openStock(tr.dataset.sym);
+  });
+  $('#modalClose').addEventListener('click', closeStock);
+  $('#stockModal').addEventListener('click', e => { if (e.target.id === 'stockModal') closeStock(); });
+  $('#taWindow').addEventListener('change', () => { if (TA_DATA) openStock(TA_DATA.symbol); });
+  $('#taBench').addEventListener('change', renderTA);
+  $('#taSub').addEventListener('change', renderTA);
+  $$('.ta-smas input').forEach(c => c.addEventListener('change', renderTA));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeStock(); });
+}
+
+async function openStock(sym) {
+  const m = $('#stockModal'); m.hidden = false;
+  $('.m-sym', m).textContent = sym; $('.m-name', m).textContent = '…';
+  try {
+    const q = new URLSearchParams({ action: 'stock', symbol: sym, window: $('#taWindow').value });
+    TA_DATA = await (await fetch('api.php?' + q.toString())).json();
+  } catch (e) { $('.m-name', m).textContent = 'kunne ikke hente data'; return; }
+  $('.m-name', m).textContent = TA_DATA.name || '';
+  $('.modal-sub', m).textContent = [TA_DATA.sector, TA_DATA.country, TA_DATA.currency].filter(Boolean).join(' · ');
+  renderTA();
+}
+function closeStock() {
+  $('#stockModal').hidden = true;
+  if (taPriceChart) { taPriceChart.destroy(); taPriceChart = null; }
+  if (taSubChart) { taSubChart.destroy(); taSubChart = null; }
+  TA_DATA = null;
+}
+
+function renderTA() {
+  if (!TA_DATA || !TA_DATA.points || !TA_DATA.points.length) return;
+  const pts = TA_DATA.points;
+  const ts = pts.map(p => Date.parse(p[0]));
+  const close = pts.map(p => p[1]);
+  const vol = pts.map(p => p[2]);
+  const b0 = close[0] || 1;
+  const b100 = close.map(c => c / b0 * 100);
+  const xy = arr => arr.map((v, i) => ({ x: ts[i], y: (v == null ? null : v) }));
+
+  const ds = [{ label: TA_DATA.symbol, data: xy(b100), borderColor: '#5b8def', borderWidth: 1.6, pointRadius: 0, tension: .1 }];
+  const SMA_COL = { 20: '#ffca3a', 50: '#2ec4b6', 100: '#ff9f1c', 200: '#f15bb5' };
+  $$('.ta-smas input:checked').forEach(c => {
+    const p = +c.dataset.sma;
+    ds.push({ label: 'SMA' + p, data: xy(sma(b100, p)), borderColor: SMA_COL[p], borderWidth: 1.2, pointRadius: 0, tension: .1 });
+  });
+  if ($('#taBench').checked && TA_DATA.bench && TA_DATA.bench.points.length) {
+    const bp = TA_DATA.bench.points, bb0 = bp[0][1] || 1;
+    ds.push({ label: TA_DATA.bench.label, data: bp.map(p => ({ x: Date.parse(p[0]), y: p[1] / bb0 * 100 })),
+      borderColor: '#e6edf3', borderWidth: 2, borderDash: [6, 4], pointRadius: 0, tension: .1 });
+  }
+  if (taPriceChart) taPriceChart.destroy();
+  taPriceChart = new Chart($('#taPrice'), { type: 'line', data: { datasets: ds }, options: baseOpts('Base 100') });
+
+  const sub = $('#taSub').value; let sds, opts;
+  if (sub === 'rsi') {
+    sds = [
+      { label: 'RSI(14)', data: xy(rsi(close, 14)), borderColor: '#9b5de5', borderWidth: 1.4, pointRadius: 0, tension: .1 },
+      { label: '70', data: ts.map(t => ({ x: t, y: 70 })), borderColor: 'rgba(248,81,73,.4)', borderWidth: 1, borderDash: [4,4], pointRadius: 0 },
+      { label: '30', data: ts.map(t => ({ x: t, y: 30 })), borderColor: 'rgba(63,185,80,.4)', borderWidth: 1, borderDash: [4,4], pointRadius: 0 },
+    ];
+    opts = baseOpts('RSI'); opts.scales.y.min = 0; opts.scales.y.max = 100;
+  } else if (sub === 'macd') {
+    const m = macd(b100);
+    sds = [
+      { type: 'bar', label: 'Histogram', data: xy(m.hist), backgroundColor: m.hist.map(v => v >= 0 ? 'rgba(63,185,80,.5)' : 'rgba(248,81,73,.5)') },
+      { label: 'MACD', data: xy(m.macd), borderColor: '#5b8def', borderWidth: 1.3, pointRadius: 0, tension: .1 },
+      { label: 'Signal', data: xy(m.signal), borderColor: '#ff9f1c', borderWidth: 1.3, pointRadius: 0, tension: .1 },
+    ];
+    opts = baseOpts('MACD');
+  } else {
+    sds = [{ type: 'bar', label: 'Volumen', data: xy(vol), backgroundColor: 'rgba(91,141,239,.5)' }];
+    opts = baseOpts('Volumen');
+  }
+  if (taSubChart) taSubChart.destroy();
+  taSubChart = new Chart($('#taSubChart'), { type: 'line', data: { datasets: sds }, options: opts });
+}
+
+function baseOpts(yTitle) {
+  return {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: { mode: 'index', intersect: false },
+    scales: {
+      x: { type: 'linear', ticks: { color: '#9aa4b2', maxTicksLimit: 8,
+            callback: v => new Date(v).toLocaleDateString('da-DK', { year: '2-digit', month: 'short' }) }, grid: { color: '#1c2330' } },
+      y: { ticks: { color: '#9aa4b2' }, grid: { color: '#1c2330' }, title: { display: true, text: yTitle, color: '#9aa4b2' } },
+    },
+    plugins: { legend: { position: 'bottom', labels: { color: '#cbd3df', boxWidth: 12, font: { size: 10 } } } },
+  };
+}
+
+// ---- indikator-matematik ----
+function sma(a, p) { const o = Array(a.length).fill(null); let s = 0; for (let i = 0; i < a.length; i++) { s += a[i]; if (i >= p) s -= a[i-p]; if (i >= p-1) o[i] = s/p; } return o; }
+function ema(a, p) { const o = Array(a.length).fill(null); const k = 2/(p+1); let prev = null;
+  for (let i = 0; i < a.length; i++) { if (a[i] == null) continue;
+    if (prev == null) { let s = 0, c = 0; for (let j = Math.max(0,i-p+1); j <= i; j++) if (a[j] != null) { s += a[j]; c++; }
+      if (c >= p) { prev = s/c; o[i] = prev; } }
+    else { prev = a[i]*k + prev*(1-k); o[i] = prev; } }
+  return o; }
+function rsi(a, p) { const o = Array(a.length).fill(null); let g = 0, l = 0;
+  for (let i = 1; i < a.length; i++) { const ch = a[i]-a[i-1], gg = Math.max(0,ch), ll = Math.max(0,-ch);
+    if (i <= p) { g += gg; l += ll; if (i === p) { g/=p; l/=p; o[i] = 100 - 100/(1+(l===0?1e9:g/l)); } }
+    else { g = (g*(p-1)+gg)/p; l = (l*(p-1)+ll)/p; o[i] = 100 - 100/(1+(l===0?1e9:g/l)); } }
+  return o; }
+function macd(a) { const e12 = ema(a,12), e26 = ema(a,26);
+  const line = a.map((_, i) => (e12[i]!=null && e26[i]!=null) ? e12[i]-e26[i] : null);
+  const sig = ema(line, 9);
+  const hist = line.map((v, i) => (v!=null && sig[i]!=null) ? v - sig[i] : null);
+  return { macd: line, signal: sig, hist }; }

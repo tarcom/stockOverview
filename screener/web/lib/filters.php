@@ -278,3 +278,29 @@ function flt_chart(array $symbols, string $window, string $bench): array {
     }
     return $out;
 }
+
+/**
+ * Daglig serie (fuld opløsning) for ÉN aktie over et vindue + benchmark — til fokus-view
+ * med tekniske indikatorer (SMA/RSI/MACD/volumen beregnes klientside af den rå serie).
+ */
+function flt_stock(string $symbol, string $window): array {
+    $window = in_array($window, flt_windows(), true) ? $window : '3y';
+    $cutoff = (new DateTime('-' . win_days($window) . ' days'))->format('Y-m-d');
+    $st = db()->prepare("SELECT price_date, COALESCE(adj_close, close) p, volume FROM " . t('prices') . "
+        WHERE symbol = ? AND price_date >= ? AND COALESCE(adj_close, close) IS NOT NULL ORDER BY price_date");
+    $st->execute([$symbol, $cutoff]);
+    $pts = [];
+    foreach ($st as $r) $pts[] = [$r['price_date'], (float)$r['p'], $r['volume'] !== null ? (int)$r['volume'] : null];
+
+    $meta = db()->prepare("SELECT name, currency, sector, country FROM " . t('securities') . " WHERE symbol = ?");
+    $meta->execute([$symbol]); $m = $meta->fetch() ?: [];
+
+    $bench = cfg()['rs_benchmark']; $bp = [];
+    $bs = db()->prepare("SELECT price_date, close FROM " . t('indexes') . " WHERE symbol = ? AND price_date >= ? ORDER BY price_date");
+    $bs->execute([$bench, $cutoff]);
+    foreach ($bs as $r) $bp[] = [$r['price_date'], (float)$r['close']];
+
+    return ['symbol'=>$symbol, 'name'=>$m['name'] ?? $symbol, 'currency'=>$m['currency'] ?? '',
+        'sector'=>$m['sector'] ?? '', 'country'=>$m['country'] ?? '', 'window'=>$window,
+        'points'=>$pts, 'bench'=>['symbol'=>$bench, 'label'=>cfg()['benchmarks'][$bench] ?? $bench, 'points'=>$bp]];
+}
