@@ -4,6 +4,7 @@
 
 const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const EXT_QUOTE_URL = 'https://finance.yahoo.com/quote/'; // ekstern detaljeside (label er neutral)
 const DOMAINS = {};            // key -> {min,max,scale,fmt,edges,counts}
 let FACETS = null;
 let debounceTimer = null;
@@ -86,6 +87,10 @@ function wireControls() {
   $('#chartBench').addEventListener('change', loadChart);
   $('#resetBtn').addEventListener('click', resetAll);
   $$('.preset').forEach(b => b.addEventListener('click', () => applyPreset(b.dataset.preset)));
+  $('#csvBtn').addEventListener('click', () => { window.location = 'api.php?action=csv&' + collectParams().toString(); });
+  $('#saveBtn').addEventListener('click', saveScreen);
+  $('#chips').addEventListener('click', onChipClick);
+  renderSaved();
   $('#shareBtn').addEventListener('click', () => {
     navigator.clipboard.writeText(location.href).then(() => {
       const b = $('#shareBtn'); const t = b.textContent; b.textContent = '✓ Kopieret'; setTimeout(() => b.textContent = t, 1200);
@@ -197,6 +202,7 @@ async function refresh() {
   $('#total').textContent = d.total.toLocaleString('da-DK');
   renderFunnel(d.funnel);
   renderResults(d.results, d.sort);
+  renderChips();
   $('#resultWrap').classList.remove('busy');
 }
 
@@ -219,7 +225,7 @@ function renderResults(rows, sort) {
     <th class="num hl">${escHtml(sortLbl)}</th><th class="num">Afkast 1Y</th><th class="num">Kvalitet 3Y</th>
     <th class="num">P/E</th><th class="num">Udbytte</th><th></th></tr></thead><tbody>`;
   rows.forEach((r, i) => {
-    const yurl = 'https://finance.yahoo.com/quote/' + encodeURIComponent(r.symbol);
+    const yurl = EXT_QUOTE_URL + encodeURIComponent(r.symbol);
     h += `<tr data-sym="${escAttr(r.symbol)}" class="clickrow" title="Klik for teknisk analyse">
       <td class="muted">${i+1}</td>
       <td class="sym"><span class="ta-dot">📈</span> ${escHtml(r.symbol)}</td>
@@ -232,7 +238,7 @@ function renderResults(rows, sort) {
       <td class="num">${fmtVal(+r.quality_3y, 'num')}</td>
       <td class="num">${fmtVal(+r.trailing_pe, 'num')}</td>
       <td class="num">${fmtVal(+r.dividend_yield, 'pct')}</td>
-      <td class="ylink"><a href="${yurl}" target="_blank" rel="noopener" title="Åbn på Yahoo Finance" onclick="event.stopPropagation()">Y!</a></td>
+      <td class="ylink"><a href="${yurl}" target="_blank" rel="noopener" title="Åbn aktiens eksterne detaljeside" onclick="event.stopPropagation()">↗</a></td>
     </tr>`;
   });
   $('#resultWrap').innerHTML = h + '</tbody></table>';
@@ -370,6 +376,63 @@ function applyPreset(name) {
   refresh();
 }
 
+// ---------- aktive-filter-chips ----------
+function renderChips() {
+  const items = [];
+  $$('.filt:not(.multi).active').forEach(el => {
+    const d = DOMAINS[el.dataset.key]; if (!d) return;
+    const lo = posToVal(+$('.r-min', el).value, d), hi = posToVal(+$('.r-max', el).value, d);
+    items.push({ key: el.dataset.key, type: 'range', text: el.dataset.label + ': ' + fmtVal(lo, d.fmt) + '–' + fmtVal(hi, d.fmt) });
+  });
+  $$('.filt.multi.active').forEach(el => {
+    const sel = $$('input:checked', el).map(i => i.value);
+    items.push({ key: el.dataset.key, type: 'multi', text: el.dataset.label + ': ' + (sel.length > 2 ? sel.length + ' valgt' : sel.join(', ')) });
+  });
+  const wrap = $('#chips');
+  wrap.innerHTML = items.length
+    ? items.map(c => `<span class="chip" data-key="${c.key}" data-type="${c.type}">${escHtml(c.text)} <span class="chip-x">×</span></span>`).join('')
+      + '<button class="chip-clear">Ryd alle</button>'
+    : '';
+}
+function onChipClick(e) {
+  if (e.target.classList.contains('chip-clear')) { resetAll(); return; }
+  const chip = e.target.closest('.chip'); if (!chip) return;
+  clearOneFilter(chip.dataset.key, chip.dataset.type);
+}
+function clearOneFilter(key, type) {
+  const el = document.querySelector('.filt[data-key="' + key + '"]'); if (!el) return;
+  if (type === 'multi') { $$('input:checked', el).forEach(i => i.checked = false); }
+  else {
+    $('.r-min', el).value = 0; $('.r-max', el).value = 1000; drawHist(el);
+    const d = DOMAINS[key]; if (d) $('.filt-vals', el).textContent = fmtVal(d.min, d.fmt) + ' – ' + fmtVal(d.max, d.fmt);
+  }
+  el.classList.remove('active'); markGroupActive(el);
+  $$('.preset').forEach(b => b.classList.remove('on'));
+  refresh();
+}
+
+// ---------- gemte screens (localStorage) ----------
+const SAVED_KEY = 'screener_saved';
+function getSaved() { try { return JSON.parse(localStorage.getItem(SAVED_KEY)) || []; } catch (e) { return []; } }
+function setSaved(a) { try { localStorage.setItem(SAVED_KEY, JSON.stringify(a)); } catch (e) {} }
+function saveScreen() {
+  const name = (prompt('Navn på denne screen:') || '').trim(); if (!name) return;
+  const saved = getSaved().filter(s => s.name !== name);
+  saved.push({ name, q: collectParams().toString() });
+  setSaved(saved); renderSaved();
+}
+function renderSaved() {
+  const saved = getSaved(), wrap = $('#savedScreens');
+  if (!wrap) return;
+  wrap.innerHTML = saved.length
+    ? '<span class="saved-lbl">Mine screens:</span>' + saved.map((s, i) =>
+        `<span class="saved-item"><a href="?${s.q}">${escHtml(s.name)}</a><span class="saved-x" data-i="${i}" title="Slet">×</span></span>`).join('')
+    : '';
+  $$('.saved-x', wrap).forEach(x => x.addEventListener('click', () => {
+    const a = getSaved(); a.splice(+x.dataset.i, 1); setSaved(a); renderSaved();
+  }));
+}
+
 // ---------- favorit-filtre (vises øverst, gemt i localStorage) ----------
 const FAV_KEY = 'screener_favs';
 function getFavs() { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch (e) { return []; } }
@@ -428,7 +491,7 @@ function initTA() {
 async function openStock(sym) {
   const m = $('#stockModal'); m.hidden = false;
   $('.m-sym', m).textContent = sym; $('.m-name', m).textContent = '…';
-  $('.m-yahoo', m).href = 'https://finance.yahoo.com/quote/' + encodeURIComponent(sym);
+  $('.m-yahoo', m).href = EXT_QUOTE_URL + encodeURIComponent(sym);
   try {
     const q = new URLSearchParams({ action: 'stock', symbol: sym, window: $('#taWindow').value });
     TA_DATA = await (await fetch('api.php?' + q.toString())).json();

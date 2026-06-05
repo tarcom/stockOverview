@@ -107,6 +107,6 @@ bar('cHist', <?= json_encode($hist) ?>, 'Aktier');
   </div>
 </section>
 
-<footer class="foot">StockScreener · kører på HTPC (PHP + MySQL) · data fra Yahoo Finance via stockOverview-ingesten</footer>
+<?php render_footer($ready ? ($h['latest'] ?? null) : null); ?>
 </body>
 </html>

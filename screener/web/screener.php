@@ -54,7 +54,7 @@ $presets = [
     </div>
     <label class="dq-toggle"><input type="checkbox" id="hideJunk" checked>
       Skjul mistænkte datafejl
-      <span class="info" title="Skjuler aktier med &gt;100% kursudsving på én dag — næsten altid korrupt Yahoo-data. Slå fra for at se alt.">i</span></label>
+      <span class="info" title="Skjuler aktier med &gt;100% kursudsving på én dag — næsten altid korrupte kursdata. Slå fra for at se alt.">i</span></label>
 
     <section class="fgroup open favgroup" id="favGroup" data-group="fav" hidden>
       <h3 class="fgroup-h"><span class="caret">▸</span> ⭐ Favoritter <span class="grp-active"></span></h3>
@@ -68,7 +68,7 @@ $presets = [
         <div class="fgroup-body">
           <?php foreach ($g['filters'] as $f): ?>
             <?php if ($f['type'] === 'range'): ?>
-              <div class="filt" data-key="<?= $f['key'] ?>" data-origin="<?= $g['id'] ?>" data-fmt="<?= $f['fmt'] ?>" data-scale="<?= $f['scale'] ?>">
+              <div class="filt" data-key="<?= $f['key'] ?>" data-label="<?= htmlspecialchars($f['label']) ?>" data-origin="<?= $g['id'] ?>" data-fmt="<?= $f['fmt'] ?>" data-scale="<?= $f['scale'] ?>">
                 <div class="filt-label"><span class="fav-star" title="Vis øverst som favorit">☆</span>
                   <?= htmlspecialchars($f['label']) ?>
                   <span class="info" title="<?= htmlspecialchars($f['info']) ?>">i</span>
@@ -81,7 +81,7 @@ $presets = [
                 </div>
               </div>
             <?php else: ?>
-              <div class="filt multi" data-key="<?= $f['key'] ?>" data-origin="<?= $g['id'] ?>">
+              <div class="filt multi" data-key="<?= $f['key'] ?>" data-label="<?= htmlspecialchars($f['label']) ?>" data-origin="<?= $g['id'] ?>">
                 <div class="filt-label"><span class="fav-star" title="Vis øverst som favorit">☆</span>
                   <?= htmlspecialchars($f['label']) ?>
                   <span class="info" title="<?= htmlspecialchars($f['info']) ?>">i</span></div>
@@ -111,8 +111,12 @@ $presets = [
         <button id="dirBtn" class="btn-ghost" title="Skift retning">▼ Højest</button>
         <label>Vis <select id="limit"><option>10</option><option selected>20</option><option>50</option><option>100</option></select></label>
         <button id="shareBtn" class="btn-ghost" title="Kopiér delbart link">🔗 Del</button>
+        <button id="csvBtn" class="btn-ghost" title="Download resultater som CSV">⬇ CSV</button>
+        <button id="saveBtn" class="btn-ghost" title="Gem disse filtre som en navngiven screen">💾 Gem</button>
       </div>
     </div>
+    <div id="savedScreens" class="saved"></div>
+    <div id="chips" class="chips"></div>
     <div id="funnel" class="funnel"></div>
 
     <div class="chartbox" id="chartbox">
@@ -144,7 +148,7 @@ $presets = [
     <div class="modal-head">
       <div class="m-title"><span class="m-sym"></span> <span class="m-name muted"></span></div>
       <div class="m-actions">
-        <a class="m-yahoo btn-ghost" target="_blank" rel="noopener" title="Åbn på Yahoo Finance">Yahoo ↗</a>
+        <a class="m-yahoo btn-ghost" target="_blank" rel="noopener" title="Åbn aktiens eksterne detaljeside">Detaljer ↗</a>
         <button id="modalClose" class="btn-ghost" title="Luk (Esc)">✕</button>
       </div>
     </div>
@@ -174,6 +178,8 @@ $presets = [
     <div class="ta-pane"><canvas id="taSubChart"></canvas></div>
   </div>
 </div>
+
+<?php render_footer(db()->query("SELECT DATE_FORMAT(MAX(computed_at),'%Y-%m-%d') FROM " . t('screener'))->fetchColumn()); ?>
 
 <script>window.SORT_OPTS = <?= json_encode($sortOpts) ?>; window.PRESETS = <?= json_encode($presets) ?>;</script>
 <script src="assets/screener.js?v=<?= filemtime(__DIR__ . '/assets/screener.js') ?>"></script>

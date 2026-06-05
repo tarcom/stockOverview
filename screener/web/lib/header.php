@@ -15,7 +15,20 @@ function render_header(string $active): void { ?>
   <nav>
     <a href="index.php"<?= $active === 'universe' ? ' class="active"' : '' ?>>Universet</a>
     <a href="screener.php"<?= $active === 'screener' ? ' class="active"' : '' ?>>Screener</a>
+    <a href="about.php"<?= $active === 'about' ? ' class="active"' : '' ?>>Om</a>
     <a href="index.php#plan">Plan &amp; status</a>
   </nav>
 </header>
+<?php }
+
+/** Fælles footer. $updated = dato-streng for sidste data-opdatering (valgfri). */
+function render_footer(?string $updated = null): void { ?>
+<footer class="foot">
+  <div class="foot-links">
+    <?php if ($updated): ?><span class="fresh" title="Sidste databeregning">● Data opdateret <?= htmlspecialchars($updated) ?></span> · <?php endif; ?>
+    <a href="about.php">Om &amp; metode</a> ·
+    <a href="https://www.buymeacoffee.com/noergaard" target="_blank" rel="noopener" class="bmc">☕ Buy me a coffee</a>
+  </div>
+  <div class="disclaimer">Kun til informations- og uddannelsesformål — <strong>ikke finansiel rådgivning</strong>. Lav altid din egen research.</div>
+</footer>
 <?php }

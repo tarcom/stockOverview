@@ -26,6 +26,19 @@ try {
         echo json_encode(flt_stock($_GET['symbol'] ?? '', $_GET['window'] ?? '3y'));
         exit;
     }
+    if ($action === 'csv') {
+        $rows = flt_results($_GET, $_GET['sort'] ?? 'quality_1y', $_GET['dir'] ?? 'desc', 2000);
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="screener.csv"');
+        $out = fopen('php://output', 'w');
+        fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM (Excel)
+        if ($rows) {
+            $cols = array_keys($rows[0]);
+            fputcsv($out, $cols);
+            foreach ($rows as $r) fputcsv($out, $r);
+        }
+        fclose($out); exit;
+    }
     // query
     $sort  = $_GET['sort'] ?? 'quality_1y';
     $dir   = $_GET['dir'] ?? 'desc';

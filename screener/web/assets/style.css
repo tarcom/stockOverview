@@ -74,3 +74,20 @@ code { background: #0b0e14; padding: .1em .4em; border-radius: 4px; font-size: .
 .plan pre code { background: none; color: #c9d1d9; padding: 0; }
 
 .foot { text-align: center; color: var(--muted); font-size: .85rem; padding: 2rem; border-top: 1px solid var(--border); margin-top: 2rem; }
+
+/* Footer-elementer */
+.foot-links { display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; align-items: center; }
+.foot .fresh { color: var(--ok); }
+.foot .bmc { color: #ffca3a; font-weight: 600; }
+.foot .disclaimer { margin-top: .5rem; font-size: .78rem; opacity: .85; }
+
+/* Om-side */
+.about { max-width: 880px; margin: 0 auto; padding: 1.5rem; line-height: 1.65; }
+.about h1 { font-size: 1.7rem; }
+.about h2 { font-size: 1.2rem; margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1.2rem; }
+.about .lead { font-size: 1.05rem; color: var(--text); }
+.about table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+.about th, .about td { border: 1px solid var(--border); padding: .5rem .7rem; text-align: left; vertical-align: top; }
+.about th { background: var(--panel2); }
+.about .note { background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--warn);
+  border-radius: 8px; padding: 1rem 1.2rem; margin: 1.5rem 0; font-size: .92rem; }
