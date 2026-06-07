@@ -317,6 +317,11 @@ function drawOverlay() {
       borderColor: '#ffca3a', borderWidth: 3, pointRadius: 0, tension: 0.1, borderDash: [2, 2] });
   }
 
+  // Bind x-aksen eksakt til data-spændet, så Chart.js ikke polstrer ud til en rund
+  // tick-grænse (= tomt område til højre). Sidste punkt = yderst til højre.
+  let xmin = Infinity, xmax = -Infinity;
+  datasets.forEach(ds => ds.data.forEach(pt => { if (pt.y != null) { if (pt.x < xmin) xmin = pt.x; if (pt.x > xmax) xmax = pt.x; } }));
+
   if (overlayChart) overlayChart.destroy();
   overlayChart = new Chart($('#overlayChart'), {
     type: 'line', data: { datasets },
@@ -335,7 +340,8 @@ function drawOverlay() {
         if (ts) { REBASE_TS = ts; drawOverlay(); }
       },
       scales: {
-        x: { type: 'linear', ticks: { color: '#9aa4b2', maxTicksLimit: 8, callback: axisDateFmt }, grid: { color: '#1c2330' } },
+        x: { type: 'linear', min: isFinite(xmin) ? xmin : undefined, max: isFinite(xmax) ? xmax : undefined,
+             ticks: { color: '#9aa4b2', maxTicksLimit: 8, callback: axisDateFmt }, grid: { color: '#1c2330' } },
         y: { type: $('#chartLogY').checked ? 'logarithmic' : 'linear',
              ticks: { color: '#9aa4b2' }, grid: { color: '#1c2330' },
              title: { display: true, text: relative ? 'Relativt til benchmark (100=match)' : 'Base 100', color: '#9aa4b2' } },
@@ -650,6 +656,7 @@ function renderTA() {
   if (!TA_DATA || !TA_DATA.points || !TA_DATA.points.length) return;
   const pts = TA_DATA.points;
   const ts = pts.map(p => Date.parse(p[0]));
+  const xmin = ts[0], xmax = ts[ts.length - 1];   // bind x-akse til data (intet tomt felt til højre)
   const close = pts.map(p => p[1]);
   const vol = pts.map(p => p[2]);
   const b0 = close[0] || 1;
@@ -668,7 +675,7 @@ function renderTA() {
       borderColor: '#e6edf3', borderWidth: 2, borderDash: [6, 4], pointRadius: 0, tension: .1 });
   }
   if (taPriceChart) taPriceChart.destroy();
-  taPriceChart = new Chart($('#taPrice'), { type: 'line', data: { datasets: ds }, options: baseOpts('Base 100') });
+  taPriceChart = new Chart($('#taPrice'), { type: 'line', data: { datasets: ds }, options: baseOpts('Base 100', xmin, xmax) });
 
   const sub = $('#taSub').value; let sds, opts;
   if (sub === 'rsi') {
@@ -677,7 +684,7 @@ function renderTA() {
       { label: '70', data: ts.map(t => ({ x: t, y: 70 })), borderColor: 'rgba(248,81,73,.4)', borderWidth: 1, borderDash: [4,4], pointRadius: 0 },
       { label: '30', data: ts.map(t => ({ x: t, y: 30 })), borderColor: 'rgba(63,185,80,.4)', borderWidth: 1, borderDash: [4,4], pointRadius: 0 },
     ];
-    opts = baseOpts('RSI'); opts.scales.y.min = 0; opts.scales.y.max = 100;
+    opts = baseOpts('RSI', xmin, xmax); opts.scales.y.min = 0; opts.scales.y.max = 100;
   } else if (sub === 'macd') {
     const m = macd(b100);
     sds = [
@@ -685,21 +692,21 @@ function renderTA() {
       { label: 'MACD', data: xy(m.macd), borderColor: '#5b8def', borderWidth: 1.3, pointRadius: 0, tension: .1 },
       { label: 'Signal', data: xy(m.signal), borderColor: '#ff9f1c', borderWidth: 1.3, pointRadius: 0, tension: .1 },
     ];
-    opts = baseOpts('MACD');
+    opts = baseOpts('MACD', xmin, xmax);
   } else {
     sds = [{ type: 'bar', label: 'Volumen', data: xy(vol), backgroundColor: 'rgba(91,141,239,.5)' }];
-    opts = baseOpts('Volumen');
+    opts = baseOpts('Volumen', xmin, xmax);
   }
   if (taSubChart) taSubChart.destroy();
   taSubChart = new Chart($('#taSubChart'), { type: 'line', data: { datasets: sds }, options: opts });
 }
 
-function baseOpts(yTitle) {
+function baseOpts(yTitle, xmin, xmax) {
   return {
     responsive: true, maintainAspectRatio: false, animation: false,
     interaction: { mode: 'index', intersect: false },
     scales: {
-      x: { type: 'linear', ticks: { color: '#9aa4b2', maxTicksLimit: 8,
+      x: { type: 'linear', min: xmin, max: xmax, ticks: { color: '#9aa4b2', maxTicksLimit: 8,
             callback: axisDateFmt }, grid: { color: '#1c2330' } },
       y: { ticks: { color: '#9aa4b2' }, grid: { color: '#1c2330' }, title: { display: true, text: yTitle, color: '#9aa4b2' } },
     },
