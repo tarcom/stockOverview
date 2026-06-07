@@ -34,3 +34,27 @@ function db(): PDO {
     }
     return $pdo;
 }
+
+/** Nøgle/værdi-cache (JSON) i DB — fx forudberegnede facetter. Selv-skabende tabel. */
+function cache_table(): void {
+    static $done = false;
+    if ($done) return;
+    db()->exec("CREATE TABLE IF NOT EXISTS " . t('cache') . " (
+        ckey VARCHAR(64) PRIMARY KEY, cval LONGTEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $done = true;
+}
+/** Hent cachet JSON-værdi (eller null hvis ikke sat). */
+function cache_get(string $key) {
+    cache_table();
+    $st = db()->prepare("SELECT cval FROM " . t('cache') . " WHERE ckey = ?");
+    $st->execute([$key]);
+    $v = $st->fetchColumn();
+    return $v === false ? null : json_decode($v, true);
+}
+/** Gem JSON-værdi i cache. */
+function cache_set(string $key, $val): void {
+    cache_table();
+    $st = db()->prepare("REPLACE INTO " . t('cache') . " (ckey, cval) VALUES (?, ?)");
+    $st->execute([$key, json_encode($val)]);
+}

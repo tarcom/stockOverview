@@ -202,7 +202,23 @@ function flt_hard_bounds(): array {
     ];
 }
 
+/**
+ * Facetter — cachet i DB (stockOverview_cache). Beregningen er ~80 fuld-tabel-scans
+ * (~8 s); resultatet ændrer sig kun ved daglig ingest. precompute.php kalder
+ * flt_build_facets() til sidst, så ingen bruger rammer den langsomme vej. Self-heal:
+ * mangler cachen, beregnes den live og gemmes.
+ */
 function flt_facets(): array {
+    $c = cache_get('facets');
+    return $c !== null ? $c : flt_build_facets();
+}
+/** Beregn facetterne og gem i cache. Kaldes fra precompute (og som fallback). */
+function flt_build_facets(): array {
+    $f = flt_compute_facets();
+    cache_set('facets', $f);
+    return $f;
+}
+function flt_compute_facets(): array {
     $pdo = db(); $tbl = t('screener');
     $HARD = flt_hard_bounds();
     // Udeluk korrupte aktier (mistænkt datakvalitet) fra domæne+histogram, så de ikke forgifter sliderne.
