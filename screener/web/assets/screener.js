@@ -87,6 +87,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     FACETS = await (await fetch('api.php?action=facets')).json();
   } catch (e) { loadDone(); $('#resultWrap').innerHTML = '<div class="err">Kunne ikke hente facetter: ' + e + '</div>'; return; }
   loadProg(45); loadStartCreep(78);
+  await loadUserData();        // gemte screens/favoritter/skjulte (DB) før de bruges
+  renderSaved();               // wireControls kørte før data var hentet
   buildRanges();
   buildMultis();
   initFavorites();
@@ -126,6 +128,7 @@ function wireControls() {
   $('#overlayChart').addEventListener('mousedown', e => { if (e.shiftKey) chartBoxZoom = true; });
   wireMiniBrush();   // navigator-graf: træk feltet for at vælge periode
   // tabel-række → fremhæv linje i grafen
+  $('#resultWrap').addEventListener('change', e => { const cb = e.target.closest('.chart-cb'); if (cb) toggleHidden(cb.dataset.sym, !cb.checked); });
   $('#resultWrap').addEventListener('mouseover', e => { const tr = e.target.closest('.clickrow'); if (tr) emphasizeLine(tr.dataset.sym, true); });
   $('#resultWrap').addEventListener('mouseout', e => { const tr = e.target.closest('.clickrow'); if (tr) emphasizeLine(tr.dataset.sym, false); });
   $('#resetBtn').addEventListener('click', resetAll);
@@ -272,10 +275,11 @@ function renderResults(rows, sort) {
     <th class="num">P/E ${I('Kurs ÷ indtjening seneste 12 mdr. Negativ eller meningsløs indtjening vises som N/A.')}</th>
     <th class="num">Udbytte ${I('Årligt udbytte ÷ kurs.')}</th>
     <th>Trend ${I('Mini-kursgraf over den valgte graf-periode (skift under "Periode" på grafen ovenfor — pt. det samme spænd som overlay-grafen).')}</th>
+    <th class="cbcol">Graf ${I('Vis aktien i overlay-grafen ovenfor. Fjern fluebenet for at skjule den fra grafen — den bliver stadig i tabellen, og valget huskes.')}</th>
     <th></th></tr></thead><tbody>`;
   rows.forEach((r, i) => {
     const yurl = EXT_QUOTE_URL + encodeURIComponent(r.symbol);
-    h += `<tr data-sym="${escAttr(r.symbol)}" class="clickrow" title="Klik for teknisk analyse">
+    h += `<tr data-sym="${escAttr(r.symbol)}" class="clickrow${isHidden(r.symbol) ? ' chart-hidden' : ''}" title="Klik for teknisk analyse">
       <td class="muted">${i+1}</td>
       <td class="sym"><span class="ta-dot">📈</span> ${escHtml(r.symbol)}</td>
       <td class="nm" title="${escAttr(r.name||'')}">${escHtml(trunc(r.name, 28))}</td>
@@ -288,6 +292,7 @@ function renderResults(rows, sort) {
       <td class="num">${fmtVal(+r.trailing_pe, 'num')}</td>
       <td class="num">${fmtVal(+r.dividend_yield, 'pct')}</td>
       <td class="spark"><canvas class="sparkcanvas" data-sym="${escAttr(r.symbol)}" width="80" height="22"></canvas></td>
+      <td class="cbcol"><input type="checkbox" class="chart-cb" data-sym="${escAttr(r.symbol)}" ${isHidden(r.symbol) ? '' : 'checked'} title="Vis i graf" onclick="event.stopPropagation()"></td>
       <td class="ylink"><a href="${yurl}" target="_blank" rel="noopener" title="Åbn aktiens eksterne detaljeside" onclick="event.stopPropagation()">↗</a></td>
     </tr>`;
   });
@@ -332,7 +337,7 @@ function drawOverlay() {
   // dato-match gav huller). benchFF(dato) = seneste benchmark-værdi på/før datoen.
   const benchFF = (CHART_RAW.bench && CHART_RAW.bench.points.length) ? makeFFill(CHART_RAW.bench.points) : null;
 
-  const datasets = (CHART_RAW.series || []).map((s, i) => {
+  const datasets = (CHART_RAW.series || []).filter(s => !HIDDEN.has(s.symbol)).map((s, i) => {
     let pts = s.points.map(p => [Date.parse(p[0]), p[1]]);
     if (relative && benchFF) pts = s.points.map(p => { const b = benchFF(p[0]); return [Date.parse(p[0]), b ? p[1] / b * 100 : null]; });
     return { label: s.symbol, symbol: s.symbol, data: pts.map(([t, y]) => ({ x: t, y })),
@@ -682,10 +687,38 @@ function clearOneFilter(key, type) {
   refresh();
 }
 
-// ---------- gemte screens (localStorage) ----------
-const SAVED_KEY = 'screener_saved';
-function getSaved() { try { return JSON.parse(localStorage.getItem(SAVED_KEY)) || []; } catch (e) { return []; } }
-function setSaved(a) { try { localStorage.setItem(SAVED_KEY, JSON.stringify(a)); } catch (e) {} }
+// ---------- per-bruger data: gemt i DB (screens + favoritter + skjulte graf-aktier) ----------
+// Identificeres med et klient-token (intet login). USERDATA holdes i hukommelsen så
+// resten af koden er synkron; ændringer persisteres til serveren (fire-and-forget).
+let USERDATA = { screens: [], favorites: [], hidden: [] };
+let HIDDEN = new Set();   // symboler skjult fra overlay-grafen (gemt i DB)
+function ownerToken() {
+  let t = localStorage.getItem('scr_owner');
+  if (!t) { t = (crypto.randomUUID ? crypto.randomUUID() : 'o' + Date.now() + Math.random().toString(36).slice(2)); localStorage.setItem('scr_owner', t); }
+  return t;
+}
+function persistUser(key) {
+  fetch('api.php?action=userset&owner=' + encodeURIComponent(ownerToken()) + '&key=' + key,
+    { method: 'POST', body: JSON.stringify(USERDATA[key]) }).catch(() => {});
+}
+async function loadUserData() {
+  try { USERDATA = await (await fetch('api.php?action=userget&owner=' + encodeURIComponent(ownerToken()))).json(); }
+  catch (e) { USERDATA = { screens: [], favorites: [], hidden: [] }; }
+  for (const k of ['screens', 'favorites', 'hidden']) if (!Array.isArray(USERDATA[k])) USERDATA[k] = [];
+  migrateLocalStorage();
+  HIDDEN = new Set(USERDATA.hidden);
+}
+// Engangs-flytning af evt. gammel localStorage-data op i DB (første gang DB er tom).
+function migrateLocalStorage() {
+  try {
+    if (!USERDATA.screens.length) { const s = JSON.parse(localStorage.getItem('screener_saved') || '[]'); if (s.length) { USERDATA.screens = s; persistUser('screens'); } }
+    if (!USERDATA.favorites.length) { const f = JSON.parse(localStorage.getItem('screener_favs') || '[]'); if (f.length) { USERDATA.favorites = f; persistUser('favorites'); } }
+  } catch (e) {}
+}
+
+// ---------- gemte screens (DB) ----------
+function getSaved() { return USERDATA.screens; }
+function setSaved(a) { USERDATA.screens = a; persistUser('screens'); }
 function saveScreen() {
   const name = (prompt('Navn på denne screen:') || '').trim(); if (!name) return;
   const saved = getSaved().filter(s => s.name !== name);
@@ -704,10 +737,9 @@ function renderSaved() {
   }));
 }
 
-// ---------- favorit-filtre (vises øverst, gemt i localStorage) ----------
-const FAV_KEY = 'screener_favs';
-function getFavs() { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch (e) { return []; } }
-function setFavs(a) { try { localStorage.setItem(FAV_KEY, JSON.stringify(a)); } catch (e) {} }
+// ---------- favorit-filtre (vises øverst, gemt i DB) ----------
+function getFavs() { return USERDATA.favorites; }
+function setFavs(a) { USERDATA.favorites = a; persistUser('favorites'); }
 
 function initFavorites() {
   $$('.fav-star').forEach(star => star.addEventListener('click', e => {
@@ -737,6 +769,17 @@ function moveFilt(key, toFav) {
   if (!el.classList.contains('multi')) drawHist(el); // canvas-redraw efter flytning
 }
 function updateFavGroup() { $('#favGroup').hidden = $$('#favGroup .filt').length === 0; }
+
+// ---------- skjul aktier fra overlay-grafen (gemt i DB; vises stadig i tabellen) ----------
+function isHidden(sym) { return HIDDEN.has(sym); }
+function toggleHidden(sym, hide) {
+  if (hide) HIDDEN.add(sym); else HIDDEN.delete(sym);
+  USERDATA.hidden = [...HIDDEN]; persistUser('hidden');
+  const sel = (window.CSS && CSS.escape) ? CSS.escape(sym) : sym;
+  const tr = document.querySelector('.rtable tr[data-sym="' + sel + '"]');
+  if (tr) tr.classList.toggle('chart-hidden', hide);
+  if (CHART_RAW) drawOverlay();   // gentegn → y auto-fitter til de synlige aktier
+}
 
 // ---------- util ----------
 function trunc(s, n) { s = s || ''; return s.length > n ? s.slice(0, n-1) + '…' : s; }

@@ -26,6 +26,19 @@ try {
         echo json_encode(flt_stock($_GET['symbol'] ?? '', $_GET['window'] ?? '3y'));
         exit;
     }
+    // Per-bruger data (gemte screens / favorit-filtre / skjulte graf-aktier).
+    if ($action === 'userget') {
+        echo json_encode(userdata_get(substr((string)($_GET['owner'] ?? ''), 0, 64)));
+        exit;
+    }
+    if ($action === 'userset') {
+        $owner = substr((string)($_GET['owner'] ?? ''), 0, 64);
+        $key   = (string)($_GET['key'] ?? '');
+        $val   = json_decode(file_get_contents('php://input'), true);
+        userdata_set($owner, $key, is_array($val) ? $val : []);
+        echo json_encode(['ok' => true]);
+        exit;
+    }
     if ($action === 'csv') {
         $rows = flt_results($_GET, $_GET['sort'] ?? 'quality_1y', $_GET['dir'] ?? 'desc', 2000);
         header('Content-Type: text/csv; charset=utf-8');

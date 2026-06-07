@@ -58,3 +58,36 @@ function cache_set(string $key, $val): void {
     $st = db()->prepare("REPLACE INTO " . t('cache') . " (ckey, cval) VALUES (?, ?)");
     $st->execute([$key, json_encode($val)]);
 }
+
+/**
+ * Per-bruger data (gemte screens, favorit-filtre, skjulte graf-aktier). Brugeren
+ * identificeres med et klient-token (localStorage) → server-persisteret, men kræver
+ * ingen login. Self-skabende tabel. Gyldige nøgler: screens, favorites, hidden.
+ */
+function userdata_table(): void {
+    static $done = false;
+    if ($done) return;
+    db()->exec("CREATE TABLE IF NOT EXISTS " . t('userdata') . " (
+        owner VARCHAR(64) NOT NULL, dkey VARCHAR(32) NOT NULL, dval LONGTEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (owner, dkey)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $done = true;
+}
+const USERDATA_KEYS = ['screens', 'favorites', 'hidden'];
+/** Alle gemte værdier for en ejer som {screens, favorites, hidden} (tomme arrays hvis intet). */
+function userdata_get(string $owner): array {
+    userdata_table();
+    $out = ['screens' => [], 'favorites' => [], 'hidden' => []];
+    if ($owner === '') return $out;
+    $st = db()->prepare("SELECT dkey, dval FROM " . t('userdata') . " WHERE owner = ?");
+    $st->execute([$owner]);
+    foreach ($st as $r) if (in_array($r['dkey'], USERDATA_KEYS, true)) $out[$r['dkey']] = json_decode($r['dval'], true) ?? [];
+    return $out;
+}
+/** Sæt én nøgle for en ejer. */
+function userdata_set(string $owner, string $key, $val): void {
+    if ($owner === '' || !in_array($key, USERDATA_KEYS, true)) return;
+    userdata_table();
+    $st = db()->prepare("REPLACE INTO " . t('userdata') . " (owner, dkey, dval) VALUES (?, ?, ?)");
+    $st->execute([$owner, $key, json_encode($val)]);
+}

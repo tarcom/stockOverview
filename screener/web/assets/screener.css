@@ -257,3 +257,10 @@
   transition: width .4s cubic-bezier(.4,0,.2,1);
 }
 @media (prefers-reduced-motion: reduce) { .load-bars span { animation: none; height: 32px; } }
+
+/* Skjul-fra-graf checkbox + tydelig markering af skjulte rækker */
+.rtable td.cbcol, .rtable th.cbcol { text-align: center; width: 44px; }
+.rtable .chart-cb { cursor: pointer; accent-color: var(--accent); }
+.rtable tr.chart-hidden { opacity: .5; }
+.rtable tr.chart-hidden td.sym { text-decoration: line-through; text-decoration-color: var(--muted); }
+.rtable tr.chart-hidden td.sym::after { content: " skjult i graf"; font-size: .68rem; color: var(--muted); text-decoration: none; font-style: italic; }
