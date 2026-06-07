@@ -964,7 +964,7 @@ function escHtml(s) { return String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;
 function escAttr(s) { return String(s ?? '').replace(/"/g, '&quot;').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
 // ============ Teknisk analyse (fokus-view ved klik på række) ============
-let taPriceChart = null, taSubChart = null, TA_DATA = null;
+let taPriceChart = null, taSubCharts = [], TA_DATA = null;
 
 function initTA() {
   $('#resultWrap').addEventListener('click', e => {
@@ -974,7 +974,7 @@ function initTA() {
   $('#stockModal').addEventListener('click', e => { if (e.target.id === 'stockModal') closeStock(); });
   $('#taWindow').addEventListener('change', () => { if (TA_DATA) openStock(TA_DATA.symbol); });
   $('#taBench').addEventListener('change', renderTA);
-  $('#taSub').addEventListener('change', renderTA);
+  $$('.ta-sub').forEach(c => c.addEventListener('change', renderTA));
   $$('.ta-smas input').forEach(c => c.addEventListener('change', renderTA));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeStock(); });
 }
@@ -1036,7 +1036,7 @@ function renderDetails() {
 function closeStock() {
   $('#stockModal').hidden = true;
   if (taPriceChart) { taPriceChart.destroy(); taPriceChart = null; }
-  if (taSubChart) { taSubChart.destroy(); taSubChart = null; }
+  taSubCharts.forEach(c => c.destroy()); taSubCharts = [];
   TA_DATA = null;
 }
 
@@ -1065,28 +1065,41 @@ function renderTA() {
   if (taPriceChart) taPriceChart.destroy();
   taPriceChart = new Chart($('#taPrice'), { type: 'line', data: { datasets: ds }, options: baseOpts('Base 100', xmin, xmax) });
 
-  const sub = $('#taSub').value; let sds, opts;
-  if (sub === 'rsi') {
-    sds = [
-      { label: 'RSI(14)', data: xy(rsi(close, 14)), borderColor: '#9b5de5', borderWidth: 1.4, pointRadius: 0, tension: .1 },
-      { label: '70', data: ts.map(t => ({ x: t, y: 70 })), borderColor: 'rgba(248,81,73,.4)', borderWidth: 1, borderDash: [4,4], pointRadius: 0 },
-      { label: '30', data: ts.map(t => ({ x: t, y: 30 })), borderColor: 'rgba(63,185,80,.4)', borderWidth: 1, borderDash: [4,4], pointRadius: 0 },
-    ];
-    opts = baseOpts('RSI', xmin, xmax); opts.scales.y.min = 0; opts.scales.y.max = 100;
-  } else if (sub === 'macd') {
-    const m = macd(b100);
-    sds = [
-      { type: 'bar', label: 'Histogram', data: xy(m.hist), backgroundColor: m.hist.map(v => v >= 0 ? 'rgba(63,185,80,.5)' : 'rgba(248,81,73,.5)') },
-      { label: 'MACD', data: xy(m.macd), borderColor: '#5b8def', borderWidth: 1.3, pointRadius: 0, tension: .1 },
-      { label: 'Signal', data: xy(m.signal), borderColor: '#ff9f1c', borderWidth: 1.3, pointRadius: 0, tension: .1 },
-    ];
-    opts = baseOpts('MACD', xmin, xmax);
-  } else {
-    sds = [{ type: 'bar', label: 'Volumen', data: xy(vol), backgroundColor: 'rgba(91,141,239,.5)' }];
-    opts = baseOpts('Volumen', xmin, xmax);
+  // Nederste paneler: 0-3 valgte indikatorer (RSI/MACD/Volumen), hver i sin egen rude.
+  taSubCharts.forEach(c => c.destroy()); taSubCharts = [];
+  const container = $('#taSubPanes'); container.innerHTML = '';
+  $$('.ta-sub:checked').forEach(c => {
+    const cfg = taSubPanel(c.value, { close, b100, vol, ts, xy, xmin, xmax });
+    if (!cfg) return;
+    const pane = document.createElement('div'); pane.className = 'ta-pane';
+    const cv = document.createElement('canvas'); pane.appendChild(cv); container.appendChild(pane);
+    taSubCharts.push(new Chart(cv, { type: 'line', data: { datasets: cfg.sds }, options: cfg.opts }));
+  });
+}
+
+// Bygger datasæt + options for ét nederste indikator-panel.
+function taSubPanel(type, c) {
+  if (type === 'rsi') {
+    const opts = baseOpts('RSI', c.xmin, c.xmax); opts.scales.y.min = 0; opts.scales.y.max = 100;
+    return { opts, sds: [
+      { label: 'RSI(14)', data: c.xy(rsi(c.close, 14)), borderColor: '#9b5de5', borderWidth: 1.4, pointRadius: 0, tension: .1 },
+      { label: '70', data: c.ts.map(t => ({ x: t, y: 70 })), borderColor: 'rgba(248,81,73,.4)', borderWidth: 1, borderDash: [4,4], pointRadius: 0 },
+      { label: '30', data: c.ts.map(t => ({ x: t, y: 30 })), borderColor: 'rgba(63,185,80,.4)', borderWidth: 1, borderDash: [4,4], pointRadius: 0 },
+    ] };
   }
-  if (taSubChart) taSubChart.destroy();
-  taSubChart = new Chart($('#taSubChart'), { type: 'line', data: { datasets: sds }, options: opts });
+  if (type === 'macd') {
+    const m = macd(c.b100);
+    return { opts: baseOpts('MACD', c.xmin, c.xmax), sds: [
+      { type: 'bar', label: 'Histogram', data: c.xy(m.hist), backgroundColor: m.hist.map(v => v >= 0 ? 'rgba(63,185,80,.5)' : 'rgba(248,81,73,.5)') },
+      { label: 'MACD', data: c.xy(m.macd), borderColor: '#5b8def', borderWidth: 1.3, pointRadius: 0, tension: .1 },
+      { label: 'Signal', data: c.xy(m.signal), borderColor: '#ff9f1c', borderWidth: 1.3, pointRadius: 0, tension: .1 },
+    ] };
+  }
+  if (type === 'vol') {
+    return { opts: baseOpts('Volumen', c.xmin, c.xmax),
+      sds: [{ type: 'bar', label: 'Volumen', data: c.xy(c.vol), backgroundColor: 'rgba(91,141,239,.5)' }] };
+  }
+  return null;
 }
 
 function baseOpts(yTitle, xmin, xmax) {

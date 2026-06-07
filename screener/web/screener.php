@@ -198,15 +198,14 @@ $presets = [
         <span class="info" title="Simpelt glidende gennemsnit (Simple Moving Average) over N dage. Udjævner kursen og viser trenden — når kursen er over SMA200 er den langsigtede trend op.">i</span>
       </span>
       <label><input type="checkbox" id="taBench" checked> S&P500-overlay</label>
-      <span>Nederste panel <select id="taSub">
-        <option value="rsi">RSI (14)</option>
-        <option value="macd">MACD</option>
-        <option value="vol">Volumen</option>
-      </select>
-      <span class="info" title="RSI: momentum 0-100 (>70 overkøbt, <30 oversolgt). MACD: forskel mellem 12- og 26-dages EMA + signallinje — krydsninger antyder trendskift. Volumen: handelsmængde pr. dag.">i</span></span>
+      <span>Nederste paneler
+        <label><input type="checkbox" class="ta-sub" value="rsi" checked> RSI</label>
+        <label><input type="checkbox" class="ta-sub" value="macd"> MACD</label>
+        <label><input type="checkbox" class="ta-sub" value="vol"> Volumen</label>
+      <span class="info" title="Slå til/fra uafhængigt (0-3 paneler). RSI: momentum 0-100 (>70 overkøbt, <30 oversolgt). MACD: forskel mellem 12- og 26-dages EMA + signallinje — krydsninger antyder trendskift. Volumen: handelsmængde pr. dag.">i</span></span>
     </div>
     <div class="ta-main"><canvas id="taPrice"></canvas></div>
-    <div class="ta-pane"><canvas id="taSubChart"></canvas></div>
+    <div id="taSubPanes"></div>
 
     <div class="ta-details">
       <div class="ta-block">
