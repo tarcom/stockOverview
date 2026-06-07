@@ -213,23 +213,23 @@ function flt_facets(): array {
             $col = $f['col']; $log = ($f['scale'] === 'log');
             $expr = $log ? "LOG10($col)" : $col;
             $cond = "$col IS NOT NULL" . ($log ? " AND $col > 0" : "") . " AND $clean";
+            // Altid: rigtige min/max (i rigtige enheder) over rene aktier — så frontenden ved
+            // om sliderens hard-grænse afskærer ægte værdier (→ vis "100+" / "≤-100%").
+            $s = $pdo->query("SELECT MIN($col) rmn, MAX($col) rmx, AVG($expr) av, STDDEV($expr) sd, COUNT(*) n
+                              FROM $tbl WHERE $cond")->fetch();
+            if (!$s || $s['n'] == 0) { $out['ranges'][$key] = null; continue; }
+            $realMn = (float)$s['rmn']; $realMx = (float)$s['rmx']; $av = (float)$s['av']; $sd = (float)$s['sd'];
             if (isset($HARD[$key])) {
-                // sane hard-grænser
                 [$rlo, $rhi] = $HARD[$key];
                 $lo = $log ? log10(max($rlo, 1e-9)) : $rlo;
                 $hi = $log ? log10($rhi) : $rhi;
-                $realMn = $rlo; $realMx = $rhi;
             } else {
-                // fallback: outlier-klippet mean±3σ
-                $s = $pdo->query("SELECT MIN($expr) mn, MAX($expr) mx, AVG($expr) av, STDDEV($expr) sd, COUNT(*) n
-                                  FROM $tbl WHERE $cond")->fetch();
-                if (!$s || $s['n'] == 0) { $out['ranges'][$key] = null; continue; }
-                $mn = (float)$s['mn']; $mx = (float)$s['mx']; $av = (float)$s['av']; $sd = (float)$s['sd'];
+                $mn = $log ? log10(max($realMn, 1e-9)) : $realMn;
+                $mx = $log ? log10(max($realMx, 1e-9)) : $realMx;
                 $lo = $sd > 0 ? max($mn, $av - 3*$sd) : $mn;
                 $hi = $sd > 0 ? min($mx, $av + 3*$sd) : $mx;
                 if ($hi <= $lo) { $hi = $mx; $lo = $mn; }
                 if ($hi <= $lo) $hi = $lo + 1;
-                $realMn = $log ? pow(10,$mn) : $mn; $realMx = $log ? pow(10,$mx) : $mx;
             }
             $B = 24;
             $st = $pdo->prepare("SELECT LEAST($B-1, GREATEST(0, FLOOR(($expr - ?) / ? * $B))) b, COUNT(*) n

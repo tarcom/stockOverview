@@ -51,6 +51,17 @@ function valToPos(val, d) {
   return Math.max(0, Math.min(1000, Math.round(t * 1000)));
 }
 
+// Label "lo – hi" for en range-slider. Viser "100+" / "≤-100%" når hard-grænsen
+// afskærer ægte data — yderpunktet sætter INTET filter, så de aktier er stadig MED.
+function rangeLabel(el) {
+  const d = DOMAINS[el.dataset.key]; if (!d) return '';
+  const pmin = +$('.r-min', el).value, pmax = +$('.r-max', el).value;
+  const lo = posToVal(pmin, d), hi = posToVal(pmax, d);
+  const loStr = (pmin === 0 && d.dmin < d.min - 1e-9) ? '≤' + fmtVal(d.min, d.fmt) : fmtVal(lo, d.fmt);
+  const hiStr = (pmax === 1000 && d.dmax > d.max + 1e-9) ? fmtVal(d.max, d.fmt) + '+' : fmtVal(hi, d.fmt);
+  return loStr + ' – ' + hiStr;
+}
+
 // ---------- init ----------
 window.addEventListener('DOMContentLoaded', async () => {
   wireGroups();
@@ -103,7 +114,7 @@ function buildRanges() {
   $$('.filt:not(.multi)').forEach(el => {
     const key = el.dataset.key, r = FACETS.ranges[key];
     if (!r) { el.style.display = 'none'; return; }
-    const d = { min: r.min, max: r.max, scale: r.scale, fmt: r.fmt, edges: r.edges, counts: r.counts };
+    const d = { min: r.min, max: r.max, dmin: r.dmin, dmax: r.dmax, scale: r.scale, fmt: r.fmt, edges: r.edges, counts: r.counts };
     DOMAINS[key] = d;
     const rmin = $('.r-min', el), rmax = $('.r-max', el);
     const upd = () => {
@@ -111,8 +122,7 @@ function buildRanges() {
         if (document.activeElement === rmin) rmin.value = rmax.value; else rmax.value = rmin.value;
       }
       drawHist(el);
-      const lo = posToVal(+rmin.value, d), hi = posToVal(+rmax.value, d);
-      $('.filt-vals', el).textContent = fmtVal(lo, d.fmt) + ' – ' + fmtVal(hi, d.fmt);
+      $('.filt-vals', el).textContent = rangeLabel(el);
       el.classList.toggle('active', +rmin.value > 0 || +rmax.value < 1000);
       markGroupActive(el);
       scheduleRefresh();
@@ -120,7 +130,7 @@ function buildRanges() {
     rmin.addEventListener('input', upd);
     rmax.addEventListener('input', upd);
     drawHist(el);
-    $('.filt-vals', el).textContent = fmtVal(d.min, d.fmt) + ' – ' + fmtVal(d.max, d.fmt);
+    $('.filt-vals', el).textContent = rangeLabel(el);
   });
 }
 
@@ -326,7 +336,7 @@ function applyStateFromURL() {
     if (mn !== null || mx !== null) { el.classList.add('active'); }
     drawHist(el);
     const lo = posToVal(+$('.r-min', el).value, d), hi = posToVal(+$('.r-max', el).value, d);
-    $('.filt-vals', el).textContent = fmtVal(lo, d.fmt) + ' – ' + fmtVal(hi, d.fmt);
+    $('.filt-vals', el).textContent = rangeLabel(el);
     markGroupActive(el);
   });
   $$('.filt.multi').forEach(el => {
@@ -338,7 +348,7 @@ function applyStateFromURL() {
 }
 function clearFilters() {
   $$('.filt:not(.multi)').forEach(el => { $('.r-min', el).value = 0; $('.r-max', el).value = 1000; el.classList.remove('active'); drawHist(el);
-    const d = DOMAINS[el.dataset.key]; if (d) $('.filt-vals', el).textContent = fmtVal(d.min, d.fmt) + ' – ' + fmtVal(d.max, d.fmt); });
+    const d = DOMAINS[el.dataset.key]; if (d) $('.filt-vals', el).textContent = rangeLabel(el); });
   $$('.filt.multi input:checked').forEach(i => i.checked = false);
   $$('.filt.multi').forEach(el => el.classList.remove('active'));
   $$('.grp-active').forEach(s => s.textContent = '');
@@ -366,7 +376,7 @@ function applyPreset(name) {
       if (rng.max != null) $('.r-max', el).value = valToPos(rng.max, d);
       el.classList.add('active'); drawHist(el);
       const lo = posToVal(+$('.r-min', el).value, d), hi = posToVal(+$('.r-max', el).value, d);
-      $('.filt-vals', el).textContent = fmtVal(lo, d.fmt) + ' – ' + fmtVal(hi, d.fmt);
+      $('.filt-vals', el).textContent = rangeLabel(el);
     }
     markGroupActive(el);
   }
@@ -382,7 +392,7 @@ function renderChips() {
   $$('.filt:not(.multi).active').forEach(el => {
     const d = DOMAINS[el.dataset.key]; if (!d) return;
     const lo = posToVal(+$('.r-min', el).value, d), hi = posToVal(+$('.r-max', el).value, d);
-    items.push({ key: el.dataset.key, type: 'range', text: el.dataset.label + ': ' + fmtVal(lo, d.fmt) + '–' + fmtVal(hi, d.fmt) });
+    items.push({ key: el.dataset.key, type: 'range', text: el.dataset.label + ': ' + rangeLabel(el) });
   });
   $$('.filt.multi.active').forEach(el => {
     const sel = $$('input:checked', el).map(i => i.value);
@@ -404,7 +414,7 @@ function clearOneFilter(key, type) {
   if (type === 'multi') { $$('input:checked', el).forEach(i => i.checked = false); }
   else {
     $('.r-min', el).value = 0; $('.r-max', el).value = 1000; drawHist(el);
-    const d = DOMAINS[key]; if (d) $('.filt-vals', el).textContent = fmtVal(d.min, d.fmt) + ' – ' + fmtVal(d.max, d.fmt);
+    const d = DOMAINS[key]; if (d) $('.filt-vals', el).textContent = rangeLabel(el);
   }
   el.classList.remove('active'); markGroupActive(el);
   $$('.preset').forEach(b => b.classList.remove('on'));
