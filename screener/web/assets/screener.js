@@ -126,8 +126,8 @@ function wireControls() {
   $('#chartEqual').addEventListener('change', drawOverlay);
   $('#chartReset').addEventListener('click', drawOverlay);   // gentegn = fuld visning (nulstiller zoom + y)
   // Shift ved museknap-ned = box-zoom på vej → undgå y-autoskalering bagefter.
-  $('#overlayChart').addEventListener('mousedown', e => { if (e.shiftKey) chartBoxZoom = true; });
-  wireMiniBrush();   // navigator-graf: træk feltet for at vælge periode
+  wireChartInteraction();   // scroll = højre-forankret x-zoom, træk = panorér
+  wireMiniBrush();          // navigator-graf: træk feltet for at vælge periode
   // tabel-række → fremhæv linje i grafen
   $('#resultWrap').addEventListener('change', e => { const cb = e.target.closest('.chart-cb'); if (cb) toggleHidden(cb.dataset.sym, !cb.checked); });
   $('#resultWrap').addEventListener('mouseover', e => { const tr = e.target.closest('.clickrow'); if (tr) emphasizeLine(tr.dataset.sym, true); });
@@ -370,10 +370,12 @@ function drawOverlay() {
       interaction: { mode: 'nearest', intersect: false },
       onHover: (e, els, chart) => {
         $$('.rtable tr.hl-row').forEach(r => r.classList.remove('hl-row'));
-        if (els.length) {
-          const sym = chart.data.datasets[els[0].datasetIndex].symbol;
+        const idx = els.length ? els[0].datasetIndex : -1;
+        if (idx >= 0) {
+          const sym = chart.data.datasets[idx].symbol;
           if (sym) { const tr = document.querySelector('.rtable tr[data-sym="' + sym + '"]'); if (tr) tr.classList.add('hl-row'); }
         }
+        emphasizeChartIdx(idx);   // gør den snappede linje fed (som markering i tabellen)
       },
       scales: {
         x: { type: 'linear', min: isFinite(xmin) ? xmin : undefined, max: isFinite(xmax) ? xmax : undefined,
@@ -389,19 +391,9 @@ function drawOverlay() {
           label: c => { const s = c.dataset.symbol; const nm = s ? (window.SYMBOL_NAMES[s] || s) : c.dataset.label;
             return `${nm}: ${c.parsed.y.toFixed(1)}%`; },
         } },
-        zoom: {
-          // scroll/pinch zoomer x; y auto-skaleres bagefter til det viste vindue.
-          // Shift+træk = box-zoom på et område (x+y) — y bevares som tegnet.
-          zoom: {
-            wheel: { enabled: true },
-            pinch: { enabled: true },
-            drag: { enabled: true, modifierKey: 'shift',
-                    backgroundColor: 'rgba(91,141,239,0.2)', borderColor: '#5b8def', borderWidth: 1 },
-            mode: 'xy',
-            onZoomComplete: ({ chart }) => { if (chartBoxZoom) { chartBoxZoom = false; } else { autoScaleY(chart); } syncMiniFromBig(); },
-          },
-          pan: { enabled: true, mode: 'x', onPanComplete: ({ chart }) => { autoScaleY(chart); syncMiniFromBig(); } }, // træk = panorér x
-        },
+        // Zoom/pan håndteres custom (wireChartInteraction): højre-forankret x-zoom på
+        // scroll + træk-for-at-panorere. Plugin'et slås helt fra (dets drag-zoom blokerede pan).
+        zoom: { zoom: { wheel: { enabled: false }, pinch: { enabled: false }, drag: { enabled: false } }, pan: { enabled: false } },
       },
     },
     plugins: [crosshair],
@@ -497,7 +489,7 @@ function applyBrushToBig() {
   if (!overlayChart || !MINI_SEL) return;
   overlayChart.options.scales.x.min = MINI_SEL.min;
   overlayChart.options.scales.x.max = MINI_SEL.max;
-  autoScaleY(overlayChart);   // kalder selv update()
+  autoScaleY(overlayChart, MINI_SEL.min, MINI_SEL.max);   // ét update (x+y); mini er kilden, så ingen sync tilbage
 }
 // Opdatér brush'en ud fra det store charts aktuelle zoom (kaldes efter zoom/pan).
 function syncMiniFromBig() {
@@ -505,6 +497,52 @@ function syncMiniFromBig() {
   const xs = overlayChart.scales.x;
   MINI_SEL = { min: Math.max(DATA_XMIN, xs.min), max: Math.min(DATA_XMAX, xs.max) };
   miniChart.update('none');
+}
+
+// Sæt hovedgrafens x-vindue + auto-fit y i samme update (ingen synlig y-zoom-blink).
+function setXWindow(min, max) {
+  overlayChart.options.scales.x.min = min;
+  overlayChart.options.scales.x.max = max;
+  autoScaleY(overlayChart, min, max);   // beregner y for NYE vindue + ét update (x+y samtidig)
+  syncMiniFromBig();
+}
+
+// Custom zoom/pan på hovedgrafen (TradingView-stil): scroll = x-zoom forankret til
+// HØJRE kant (nyeste data bevares); træk = panorér. y auto-fittes altid bagefter.
+function wireChartInteraction() {
+  const cv = $('#overlayChart');
+  cv.addEventListener('wheel', e => {
+    if (!overlayChart) return;
+    e.preventDefault();
+    const xs = overlayChart.scales.x, right = xs.max, span = xs.max - xs.min;
+    const full = DATA_XMAX - DATA_XMIN;
+    const factor = e.deltaY < 0 ? 0.82 : 1 / 0.82;                 // ind = mindre span
+    const newSpan = Math.max(full * 0.01, Math.min(full, span * factor));
+    let min = right - newSpan;
+    if (min < DATA_XMIN) min = DATA_XMIN;                          // forankr højre, skær fra venstre
+    setXWindow(min, right);
+  }, { passive: false });
+
+  let pan = null;
+  cv.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || !overlayChart) return;
+    pan = { x: e.clientX, min: overlayChart.scales.x.min, max: overlayChart.scales.x.max };
+    cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing';
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!pan) return;
+    const xs = overlayChart.scales.x;
+    const msPerPx = (pan.max - pan.min) / (xs.right - xs.left);
+    const span = pan.max - pan.min;
+    let min = pan.min - (e.clientX - pan.x) * msPerPx, max = min + span;
+    if (min < DATA_XMIN) { min = DATA_XMIN; max = min + span; }
+    if (max > DATA_XMAX) { max = DATA_XMAX; min = max - span; }
+    setXWindow(min, max);
+  });
+  const endPan = e => { if (pan) { pan = null; cv.style.cursor = ''; try { cv.releasePointerCapture(e.pointerId); } catch (_) {} } };
+  cv.addEventListener('pointerup', endPan);
+  cv.addEventListener('pointercancel', endPan);
+  cv.addEventListener('dblclick', () => { if (overlayChart) setXWindow(DATA_XMIN, DATA_XMAX); });  // dobbeltklik = nulstil zoom
 }
 
 // Pointer-styring på navigatoren: træk kanter (resize), træk midten (flyt), klik udenfor (nyt felt).
@@ -545,11 +583,10 @@ function wireMiniBrush() {
   cv.addEventListener('pointercancel', end);
 }
 
-// Sættes når brugeren starter en Shift+træk (box-zoom), så y ikke auto-skaleres bagefter.
-let chartBoxZoom = false;
-// Skalér y-aksen til min/max for de synlige datapunkter i det aktuelle x-vindue (+ 5% luft).
-function autoScaleY(chart) {
-  const xs = chart.scales.x, xmin = xs.min, xmax = xs.max;
+// Skalér y-aksen til min/max for datapunkterne i x-vinduet (+ 5% luft). xmin/xmax kan
+// gives eksplicit (fra zoom/pan) så vi rammer det NYE vindue i samme update som x.
+function autoScaleY(chart, xmin, xmax) {
+  if (xmin == null) { xmin = chart.scales.x.min; xmax = chart.scales.x.max; }
   let lo = Infinity, hi = -Infinity;
   chart.data.datasets.forEach((ds, i) => {
     if (chart.getDatasetMeta(i).hidden) return;
@@ -603,11 +640,18 @@ function drawSpark(cv, pts) {
   });
   ctx.stroke();
 }
+// Gør aktie-linjen ved dataset-indeks fed (resten normale). Bruges af både graf-hover
+// og tabel-række-hover, så den fremhævede aktie står ud fra de andre kurver.
+function emphasizeChartIdx(idx) {
+  if (!overlayChart || overlayChart.$hoverIdx === idx) return;
+  overlayChart.$hoverIdx = idx;
+  overlayChart.data.datasets.forEach((ds, i) => { if (ds.symbol) ds.borderWidth = (i === idx ? 4 : 1.5); });
+  overlayChart.update('none');
+}
 // Tabel-række → fremhæv aktiens linje i grafen.
 function emphasizeLine(sym, on) {
   if (!overlayChart) return;
-  const ds = overlayChart.data.datasets.find(d => d.symbol === sym);
-  if (ds) { ds.borderWidth = on ? 4 : 1.5; overlayChart.update('none'); }
+  emphasizeChartIdx(on ? overlayChart.data.datasets.findIndex(d => d.symbol === sym) : -1);
 }
 function fmtCol(col, v) {
   v = +v;
