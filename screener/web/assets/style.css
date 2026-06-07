@@ -98,3 +98,13 @@ code { background: #0b0e14; padding: .1em .4em; border-radius: 4px; font-size: .
 .about .filter-help th { width: 240px; white-space: nowrap; font-weight: 600; vertical-align: top; }
 .info-inline { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px;
   border-radius: 50%; background: var(--panel2); border: 1px solid var(--border); color: var(--muted); font-size: 10px; }
+
+/* ---------- Scrollbars i temaets farver (filtre, multivalg-lister, hele siden) ---------- */
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border); border-radius: 6px; border: 2px solid var(--bg); background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
