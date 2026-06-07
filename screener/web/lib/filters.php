@@ -169,6 +169,16 @@ function flt_results(array $p, string $sort, string $dir, int $limit): array {
         mkt_cap_usd,last_close,history_years,
         quality_1y,quality_3y,cagr_1y,ret_1m,ret_6m,ret_1y,ret_3y,ret_5y,trend_r2_3y,maxdd_1y,
         sharpe_1y,vol_1y,beta_1y,mkt_r2_1y,rs_1y,trailing_pe,price_to_book,dividend_yield,return_on_equity";
+    // Medtag kolonner for de AKTIVE range-filtre (undtagen junk-toggle), så tabellen kan
+    // vise værdierne for det man filtrerer på. Dedupliker mod de faste kolonner.
+    $fixed = array_flip(array_map('trim', explode(',', preg_replace('/\s+/', '', $cols))));
+    foreach (flt_all() as $key => $f) {
+        if ($f['type'] === 'range' && $key !== 'max_day_move'
+            && (is_numeric($p["{$key}_min"] ?? null) || is_numeric($p["{$key}_max"] ?? null))
+            && !isset($fixed[$f['col']])) {
+            $cols .= ',' . $f['col']; $fixed[$f['col']] = 1;
+        }
+    }
     $sql = "SELECT $cols, $sort AS _sortval FROM " . t('screener') . " WHERE ($w) AND $sort IS NOT NULL ORDER BY $sort $dir LIMIT ?";
     $st = db()->prepare($sql);
     $i = 1; foreach ($b as $v) $st->bindValue($i++, $v);

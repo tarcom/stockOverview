@@ -274,3 +274,7 @@
 .period-btns .pbtn { background: none; border: none; color: var(--muted); font-size: .8rem; padding: .2rem .5rem; border-radius: 5px; cursor: pointer; }
 .period-btns .pbtn:hover { color: var(--text); }
 .period-btns .pbtn.on { background: var(--accent); color: #fff; font-weight: 600; }
+
+/* Kolonner for de filtre der er "i spil" — subtil grøn-tonet markering */
+.rtable th.filt-col, .rtable td.filt-col { background: rgba(46,196,182,.07); }
+.rtable th.filt-col { color: #2ec4b6; }

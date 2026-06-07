@@ -276,6 +276,13 @@ function renderResults(rows, sort) {
   if (!rows || !rows.length) { $('#resultWrap').innerHTML = '<div class="empty-r">Ingen aktier matcher. Løsn et filter.</div>'; loadDone(); return; }
   const sortLbl = (window.SORT_OPTS && window.SORT_OPTS[sort]) || sort;
   const I = t => `<span class="info" title="${escAttr(t)}">i</span>`;
+  // Ekstra kolonner for de range-filtre der er "i spil" (undtagen dem der allerede vises fast).
+  const FIXED_SHOWN = new Set(['mkt_cap_usd', sort, 'ret_1y', 'quality_3y', 'trailing_pe', 'dividend_yield']);
+  const activeCols = $$('.filt:not(.multi).active')
+    .map(el => ({ key: el.dataset.key, label: el.dataset.label }))
+    .filter(c => !FIXED_SHOWN.has(c.key) && DOMAINS[c.key]);
+  const fHead = activeCols.map(c => `<th class="num filt-col">${escHtml(c.label)} ${I('Værdien for dette filter, som du har i spil.')}</th>`).join('');
+  const fRow = r => activeCols.map(c => `<td class="num filt-col">${fmtVal(r[c.key] == null ? null : +r[c.key], DOMAINS[c.key].fmt)}</td>`).join('');
   let h = `<table class="rtable"><thead><tr>
     <th>#</th><th>Symbol</th><th>Navn</th><th>Sektor</th><th>Land</th>
     <th class="num">Mkt cap ${I('Markedsværdi i USD (omregnet, så aktier kan sammenlignes på tværs af børser).')}</th>
@@ -284,6 +291,7 @@ function renderResults(rows, sort) {
     <th class="num">Kvalitet 3Y ${I('Kvalitets-score over 3 år: annualiseret eksponentiel vækst × R² (belønner stabil OG høj vækst).')}</th>
     <th class="num">P/E ${I('Kurs ÷ indtjening seneste 12 mdr. Negativ eller meningsløs indtjening vises som N/A.')}</th>
     <th class="num">Udbytte ${I('Årligt udbytte ÷ kurs.')}</th>
+    ${fHead}
     <th>Trend ${I('Mini-kursgraf over den valgte graf-periode (skift under "Periode" på grafen ovenfor — pt. det samme spænd som overlay-grafen).')}</th>
     <th class="cbcol">Graf ${I('Vis aktien i overlay-grafen ovenfor. Fjern fluebenet for at skjule den fra grafen — den bliver stadig i tabellen, og valget huskes.')}</th>
     <th></th></tr></thead><tbody>`;
@@ -302,6 +310,7 @@ function renderResults(rows, sort) {
       <td class="num">${fmtVal(+r.quality_3y, 'num')}</td>
       <td class="num">${fmtVal(+r.trailing_pe, 'num')}</td>
       <td class="num">${fmtVal(+r.dividend_yield, 'pct')}</td>
+      ${fRow(r)}
       <td class="spark"><canvas class="sparkcanvas" data-sym="${escAttr(r.symbol)}" width="80" height="22"></canvas></td>
       <td class="cbcol"><input type="checkbox" class="chart-cb" data-sym="${escAttr(r.symbol)}" ${isHidden(r.symbol) ? '' : 'checked'} title="Vis i graf" onclick="event.stopPropagation()"></td>
       <td class="ylink"><a href="${yurl}" target="_blank" rel="noopener" title="Åbn aktiens eksterne detaljeside" onclick="event.stopPropagation()">↗</a></td>
