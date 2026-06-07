@@ -61,14 +61,22 @@ public class Ingest {
         // RESUME_WINDOW_DAYS over — så en afbrudt nat-backfill kan genoptages over flere
         // nætter (kør bare igen; den fortsætter hvor den slap). INGEST_FORCE=1 gen-henter alt
         // (brug det til den daglige inkrementelle kørsel, hvor alle tickers skal opdateres).
-        boolean force = "1".equals(System.getenv("INGEST_FORCE")) || BACKFILL_ALL;
-        if (BACKFILL_ALL) System.out.println("INGEST_BACKFILL_ALL=1: fuld gen-hentning af hele historikken (range=max) for alle symboler.");
+        boolean force = "1".equals(System.getenv("INGEST_FORCE"));
         Set<String> skip;
         try (Connection conn = StockDb.getConnection()) {
             StockDb.ensureSchema(conn);
             skip = StockDb.loadNotFound(conn);
             int nf = skip.size();
-            if (force) {
+            if (BACKFILL_ALL) {
+                // Genoptag-bart: springer kun 'not_found' + symboler der ALLEREDE er
+                // backfillet (status='backfilled'). Stop og kør igen → fortsætter hvor
+                // den slap. (Pausér gerne den daglige cron under kampagnen, så den ikke
+                // overskriver 'backfilled' → 'ok'.)
+                Set<String> done = StockDb.loadBackfilled(conn);
+                skip.addAll(done);
+                System.out.println("INGEST_BACKFILL_ALL=1: fuld gen-hentning (range=max). Springer "
+                        + nf + " 'not_found' + " + done.size() + " allerede-backfillede over (genoptager).");
+            } else if (force) {
                 System.out.println("INGEST_FORCE=1: springer kun " + nf + " 'not_found' over (gen-henter alt).");
             } else {
                 Set<String> recent = StockDb.loadRecentlyDone(conn, RESUME_WINDOW_DAYS);
@@ -137,7 +145,8 @@ public class Ingest {
                 // fundamentals kan fejle (fx fonde/indeks uden nøgletal) — kurser er stadig gemt
             }
 
-            StockDb.logIngest(conn, symbol, lastPrice, fundDate, points, "ok", null);
+            // I backfill-kampagnen markeres som 'backfilled' så genstart kan springe dem over.
+            StockDb.logIngest(conn, symbol, lastPrice, fundDate, points, BACKFILL_ALL ? "backfilled" : "ok", null);
             okCount.incrementAndGet();
         } catch (Exception e) {
             String msg = e.getMessage() != null ? e.getMessage() : e.toString();

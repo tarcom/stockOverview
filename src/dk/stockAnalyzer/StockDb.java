@@ -141,6 +141,18 @@ public class StockDb {
         return set;
     }
 
+    /** Symboler der allerede er fuld-backfillet (status='backfilled') — springes over så en
+     *  INGEST_BACKFILL_ALL-kampagne kan genoptages uden tidsvindue (backfill er permanent). */
+    public static Set<String> loadBackfilled(Connection conn) throws SQLException {
+        Set<String> set = new HashSet<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(
+                     "SELECT symbol FROM stockOverview_ingest_log WHERE status='backfilled'")) {
+            while (rs.next()) set.add(rs.getString(1));
+        }
+        return set;
+    }
+
     /** Symboler hentet OK inden for de seneste {@code windowDays} dage — springes over,
      *  så en afbrudt nat-backfill kan genoptages effektivt over FLERE nætter
      *  (rullende vindue, ikke kun "i dag", så genoptagelse på tværs af dage virker). */
