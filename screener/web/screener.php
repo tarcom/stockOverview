@@ -45,6 +45,14 @@ $presets = [
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 </head>
 <body>
+<div id="loadOverlay" class="load-overlay">
+  <div class="load-card">
+    <div class="load-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="load-title">Henter markedsdata…</div>
+    <div class="load-sub">Gennemsøger ~150.000 aktier</div>
+    <div class="load-track"><div id="loadBar" class="load-fill"></div></div>
+  </div>
+</div>
 <?php render_header('screener'); ?>
 
 <main class="screener">

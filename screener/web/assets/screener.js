@@ -63,13 +63,30 @@ function rangeLabel(el) {
 }
 
 // ---------- init ----------
+// ---------- loading-overlay: omtrentlig progress, færdig når første graf er tegnet ----------
+let FIRST_LOAD = true, loadCreep = null;
+function loadProg(pct) { const b = $('#loadBar'); if (b) b.style.width = Math.min(99, pct) + '%'; }
+function loadStartCreep(to) { // glider langsomt mod et loft, så den føles levende mellem stadier
+  clearInterval(loadCreep); let cur = parseFloat($('#loadBar')?.style.width) || 5;
+  loadCreep = setInterval(() => { cur += (to - cur) * 0.08; loadProg(cur); if (cur > to - 0.5) clearInterval(loadCreep); }, 120);
+}
+function loadDone() {
+  if (!FIRST_LOAD) return; FIRST_LOAD = false;
+  clearInterval(loadCreep);
+  const o = $('#loadOverlay'), b = $('#loadBar');
+  if (b) b.style.width = '100%';
+  if (o) { setTimeout(() => { o.classList.add('done'); setTimeout(() => o.remove(), 500); }, 180); }
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   wireGroups();
   wireControls();
   initTA();
+  loadProg(12); loadStartCreep(38);
   try {
     FACETS = await (await fetch('api.php?action=facets')).json();
-  } catch (e) { $('#resultWrap').innerHTML = '<div class="err">Kunne ikke hente facetter: ' + e + '</div>'; return; }
+  } catch (e) { loadDone(); $('#resultWrap').innerHTML = '<div class="err">Kunne ikke hente facetter: ' + e + '</div>'; return; }
+  loadProg(45); loadStartCreep(78);
   buildRanges();
   buildMultis();
   initFavorites();
@@ -82,6 +99,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (preset && (window.PRESETS || {})[preset]) applyPreset(preset); // deep-link til preset
   else refresh();
   if (ta) openStock(ta); // deep-link til teknisk analyse
+  // sikkerhedsnet: skjul overlay efter 12 s selv hvis noget hænger
+  setTimeout(loadDone, 12000);
 });
 
 function wireGroups() {
@@ -240,7 +259,7 @@ function renderFunnel(funnel) {
 }
 
 function renderResults(rows, sort) {
-  if (!rows || !rows.length) { $('#resultWrap').innerHTML = '<div class="empty-r">Ingen aktier matcher. Løsn et filter.</div>'; return; }
+  if (!rows || !rows.length) { $('#resultWrap').innerHTML = '<div class="empty-r">Ingen aktier matcher. Løsn et filter.</div>'; loadDone(); return; }
   const sortLbl = (window.SORT_OPTS && window.SORT_OPTS[sort]) || sort;
   const I = t => `<span class="info" title="${escAttr(t)}">i</span>`;
   let h = `<table class="rtable"><thead><tr>
@@ -293,14 +312,15 @@ function axisDateFmt(v, i, ticks) {
 
 async function loadChart() {
   const syms = (window.CURRENT_SYMBOLS || []).slice(0, 16);
-  if (!syms.length) { CHART_RAW = null; if (overlayChart) { overlayChart.destroy(); overlayChart = null; } clearSparklines(); return; }
+  if (!syms.length) { CHART_RAW = null; if (overlayChart) { overlayChart.destroy(); overlayChart = null; } clearSparklines(); loadDone(); return; }
   const win = $('#chartWindow').value, bench = $('#chartBench').value;
   try {
     const q = new URLSearchParams({ action: 'chart', symbols: syms.join('~'), window: win, bench });
     CHART_RAW = await (await fetch('api.php?' + q.toString())).json();
-  } catch (e) { return; }
+  } catch (e) { loadDone(); return; }
   drawOverlay();
   drawSparklines();
+  loadDone();   // første graf tegnet → skjul loading-overlay
 }
 
 // Bygger/gentegner overlay-grafen ud fra CHART_RAW + transformationer (relativ, ligevægt, rebase).
