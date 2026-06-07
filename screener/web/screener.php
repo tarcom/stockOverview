@@ -149,7 +149,6 @@ $presets = [
       </div>
       <div class="chart-canvas-wrap"><canvas id="overlayChart"></canvas></div>
       <div class="chart-mini-wrap" id="miniWrap"><canvas id="overlayMini"></canvas></div>
-      <div class="chart-help muted">Indekseret til 100 ved start · <strong>scroll</strong> = zoom tid (y tilpasser sig), <strong>træk</strong> = panorér, <strong>Shift+træk</strong> = zoom ind på et område, <strong>⟲</strong> = nulstil · <strong>oversigten nederst</strong>: træk feltet for at vælge periode · klik i forklaringen → teknisk analyse · musen over = navn + highlight i tabellen</div>
     </div>
 
     <div id="resultWrap" class="result-wrap"><div class="loading">Indlæser…</div></div>

@@ -254,7 +254,7 @@ async function refresh() {
 function renderFunnel(funnel) {
   if (!funnel || funnel.length <= 1) { $('#funnel').innerHTML = ''; return; }
   const top = funnel[0].n || 1;
-  $('#funnel').innerHTML = '<div class="funnel-h">Udfaldsrum snævres ind:</div>' + funnel.map((s, i) => {
+  $('#funnel').innerHTML = '<div class="funnel-h">Udfaldsrum snævres ind: <span class="info" title="Viser hvor mange aktier der er tilbage efter hvert filter lægges oveni det forrige — så du kan se hvilket filter der skærer mest fra.">i</span></div>' + funnel.map((s, i) => {
     const pct = Math.max(2, Math.round((s.n / top) * 100));
     return `<div class="fstep"><span class="flabel">${escHtml(s.label)}</span>
       <span class="fbar"><span style="width:${pct}%"></span></span>
@@ -376,20 +376,15 @@ function drawOverlay() {
         x: { type: 'linear', min: isFinite(xmin) ? xmin : undefined, max: isFinite(xmax) ? xmax : undefined,
              ticks: { color: '#9aa4b2', maxTicksLimit: 8, callback: axisDateFmt }, grid: { color: '#1c2330' } },
         y: { type: $('#chartLogY').checked ? 'logarithmic' : 'linear',
-             ticks: { color: '#9aa4b2' }, grid: { color: '#1c2330' },
-             title: { display: true, text: relative ? 'Relativt til benchmark (100=match)' : 'Base 100', color: '#9aa4b2' } },
+             ticks: { color: '#9aa4b2', callback: v => v + '%' }, grid: { color: '#1c2330' },
+             title: { display: true, text: relative ? 'Relativt til benchmark (%, 100=match)' : 'Base 100 (%)', color: '#9aa4b2' } },
       },
       plugins: {
-        legend: { position: 'bottom', labels: { color: '#cbd3df', boxWidth: 12, font: { size: 11 } },
-          onClick: (e, item) => {                   // klik forklaring → teknisk analyse
-            const ds = overlayChart.data.datasets[item.datasetIndex];
-            if (ds && ds.symbol) openStock(ds.symbol);
-            else { const m = overlayChart.getDatasetMeta(item.datasetIndex); m.hidden = !m.hidden; overlayChart.update(); }
-          } },
-        tooltip: { callbacks: {
-          title: items => items.length ? new Date(items[0].parsed.x).toLocaleDateString('da-DK') : '',
+        legend: { display: false },   // tickers står i tabellen — ingen værdi at gentage dem her
+        tooltip: { displayColors: false, callbacks: {
+          title: () => '',            // dato vises via crosshair på x-aksen
           label: c => { const s = c.dataset.symbol; const nm = s ? (window.SYMBOL_NAMES[s] || s) : c.dataset.label;
-            return `${nm}: ${c.parsed.y.toFixed(1)}`; },
+            return `${nm}: ${c.parsed.y.toFixed(1)}%`; },
         } },
         zoom: {
           // scroll/pinch zoomer x; y auto-skaleres bagefter til det viste vindue.
@@ -406,6 +401,7 @@ function drawOverlay() {
         },
       },
     },
+    plugins: [crosshair],
   });
   // Navigator-graf: fuldt data-spænd, brush = det viste vindue (nulstilles til fuldt ved gentegn).
   DATA_XMIN = isFinite(xmin) ? xmin : 0; DATA_XMAX = isFinite(xmax) ? xmax : 1;
@@ -437,6 +433,40 @@ const miniBrush = {
     ctx.restore();
   },
 };
+
+// Crosshair: lodret+vandret stiplet linje fra nærmeste datapunkt, med dato på x-aksen
+// og %-værdi på y-aksen (så vi ikke behøver dato i tooltip'en). Snapper til nærmeste linje.
+const crosshair = {
+  id: 'crosshair',
+  afterDraw(chart) {
+    const act = chart.tooltip?.getActiveElements?.() || [];
+    if (!act.length) return;
+    const { ctx, chartArea: ca } = chart;
+    const el = act[0].element, px = el.x, py = el.y;
+    const ds = chart.data.datasets[act[0].datasetIndex], pt = ds.data[act[0].index];
+    if (!pt) return;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(154,164,178,0.55)'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(px, ca.top); ctx.lineTo(px, ca.bottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ca.left, py); ctx.lineTo(ca.right, py); ctx.stroke();
+    ctx.setLineDash([]);
+    const dateStr = new Date(pt.x).toLocaleDateString('da-DK', { day: '2-digit', month: 'short', year: 'numeric' });
+    crosshairLabel(ctx, px, ca.bottom + 4, dateStr, 'x', ca);
+    crosshairLabel(ctx, ca.left - 4, py, pt.y.toFixed(1) + '%', 'y', ca);
+    ctx.restore();
+  },
+};
+function crosshairLabel(ctx, x, y, text, axis, ca) {
+  ctx.font = '600 11px system-ui, sans-serif';
+  const w = ctx.measureText(text).width + 10, h = 17;
+  let bx, by;
+  if (axis === 'x') { bx = Math.max(ca.left, Math.min(ca.right - w, x - w / 2)); by = y; }
+  else { bx = x - w; by = Math.max(ca.top, Math.min(ca.bottom - h, y - h / 2)); }
+  ctx.fillStyle = '#5b8def';
+  ctx.fillRect(bx, by, w, h);
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, bx + 5, by + h / 2 + 0.5);
+}
 
 function drawMini(datasets) {
   const thin = datasets.filter(ds => ds.symbol || ds.label).map(ds => ({

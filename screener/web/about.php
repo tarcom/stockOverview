@@ -35,6 +35,23 @@ require __DIR__ . '/lib/filters.php';   // samme kilde som filter-tooltipsene (f
   <em>og</em> jævnt — og straffer kaotiske kursforløb. En aktie der fordobles i et hak får lav score; en der
   stiger som efter en lineal får høj.</p>
 
+  <h2>Sådan bruger du graferne</h2>
+  <p>De viste aktier sammenlignes på én <strong>base-100-graf</strong>: alle starter i 100 ved periodens
+  begyndelse, så kurverne viser den procentvise udvikling og kan sammenlignes direkte uanset kurs.</p>
+  <ul>
+    <li><strong>Musen over</strong> grafen viser et sigtekors der snapper til nærmeste kurve — med dato på
+      x-aksen og %-værdi på y-aksen — plus aktiens navn. Hold musen over en tabel-række for at fremhæve den
+      tilsvarende kurve.</li>
+    <li><strong>Scroll</strong> = zoom på tids-aksen (y-aksen tilpasser sig automatisk det viste vindue).</li>
+    <li><strong>Træk</strong> = panorér (når du har zoomet ind). <strong>Shift+træk</strong> = zoom ind på et
+      udvalgt område. <strong>⟲</strong> nulstiller.</li>
+    <li><strong>Navigator-grafen</strong> nederst viser hele perioden; træk det markerede felt (kanter, midten
+      eller tegn et nyt) for at vælge hvilket udsnit den store graf viser.</li>
+    <li><strong>Graf-kolonnen</strong> i tabellen: fjern fluebenet for at skjule en aktie fra grafen (den bliver
+      i tabellen). Valget huskes.</li>
+  </ul>
+  <p>Klik en aktie (eller dens række) for <strong>teknisk analyse</strong> (SMA, RSI, MACD, volumen).</p>
+
   <h2>Alle filtre forklaret</h2>
   <p>Hvert filter på <a href="screener.php">Screener</a>-siden har en lille <span class="info-inline">i</span>
   med samme forklaring du ser her — teksterne kommer fra ét fælles sted, så de aldrig er i utakt.</p>
