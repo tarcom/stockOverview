@@ -127,6 +127,13 @@ function buildRow($sym, $sec, $series, $fund, $spx, $fx, $WINDOWS, $METRICS, $FU
     // Ryd meningsløse P/E-værdier: ≤0 = negativ indtjening, >1000 = nær-nul indtjening → N/A.
     foreach (['trailing_pe','forward_pe'] as $pe)
         if ($row[$pe] !== null && ($row[$pe] <= 0 || $row[$pe] > 1000)) $row[$pe] = null;
+    // Nulstil fysisk umulige/korrupte fundamentals (margin ±20000%, P/S negativ osv.) → N/A.
+    foreach (['price_to_sales'=>[0,1000],'price_to_book'=>[0,1000],'ev_to_ebitda'=>[-200,1000],
+              'ev_to_revenue'=>[-50,500],'peg_ratio'=>[-50,200],'profit_margins'=>[-5,5],
+              'operating_margins'=>[-5,5],'gross_margins'=>[-1,1.5],'return_on_equity'=>[-5,5],
+              'return_on_assets'=>[-2,2],'revenue_growth'=>[-1,50],'earnings_growth'=>[-1,50],
+              'debt_to_equity'=>[0,5000]] as $col => $rng)
+        if ($row[$col] !== null && ($row[$col] < $rng[0] || $row[$col] > $rng[1])) $row[$col] = null;
 
     // Per-vindue metrics
     foreach ($METRICS as $m) foreach (array_keys($WINDOWS) as $w) $row["{$m}_{$w}"] = null;
@@ -207,6 +214,8 @@ function windowMetrics(array $sub, array $spx): ?array {
         }
     }
 
+    $maxdd = max(-1.0, $maxdd);                       // drawdown er matematisk i [-1,0]
+    if ($beta !== null && abs($beta) > 5) $beta = null; // |beta|>5 = ustabil regression/korrupt
     return [
         'ret'=>r($ret), 'cagr'=>r($cagr), 'quality'=>r($quality), 'trend_r2'=>r($r2log),
         'lin_r2'=>r($r2lin), 'vol'=>r($vol), 'maxdd'=>r($maxdd), 'sharpe'=>r($sharpe),

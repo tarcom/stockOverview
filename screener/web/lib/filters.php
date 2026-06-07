@@ -178,22 +178,59 @@ function flt_results(array $p, string $sort, string $dir, int $limit): array {
  * log-skala hvor relevant); pr. multivalg distinkte værdier + antal. Beregnes globalt
  * (hele universet) — giver brugeren et fast billede af "hvor data ligger".
  */
+/**
+ * Sane hard-grænser pr. metric til slider-domænerne. Mange værdier i rådata er
+ * fysisk umulige eller korrupte (margin ±20000%, P/S negativ, beta ±32, drawdown
+ * <-100%), så vi klipper sliderne til fornuftige intervaller i stedet for at lade
+ * outliers gøre dem ubrugelige. Aktier udenfor klumper bare i sliderens ender.
+ */
+function flt_hard_bounds(): array {
+    return [
+        'mkt_cap_usd'=>[1e6,3e12], 'last_close'=>[0.01,1e5], 'history_years'=>[0,10.5], 'max_day_move'=>[0,2],
+        'ret_1m'=>[-0.6,0.6],'ret_3m'=>[-0.8,1],'ret_6m'=>[-0.9,1.5],'ret_1y'=>[-1,3],
+        'ret_2y'=>[-1,5],'ret_3y'=>[-1,8],'ret_5y'=>[-1,15],'ret_10y'=>[-1,30],
+        'cagr_1y'=>[-1,3],'cagr_3y'=>[-1,2],'cagr_5y'=>[-1,1],
+        'quality_1y'=>[-1,3],'quality_2y'=>[-1,4],'quality_3y'=>[-1,2],'quality_5y'=>[-1,1],
+        'trend_r2_1y'=>[0,1],'trend_r2_3y'=>[0,1],'trend_r2_5y'=>[0,1],'mkt_r2_1y'=>[0,1],
+        'maxdd_1y'=>[-1,0],'maxdd_3y'=>[-1,0],'sharpe_1y'=>[-3,5],'sharpe_3y'=>[-3,3],'vol_1y'=>[0,1.5],
+        'beta_1y'=>[-2,3],'rs_1y'=>[-1,3],'rs_3y'=>[-1,5],'rs_5y'=>[-1,10],
+        'trailing_pe'=>[0,100],'forward_pe'=>[0,100],'peg_ratio'=>[0,10],'price_to_book'=>[0,20],
+        'price_to_sales'=>[0,30],'ev_to_ebitda'=>[0,50],'dividend_yield'=>[0,0.15],
+        'return_on_equity'=>[-1,1],'return_on_assets'=>[-0.5,0.5],'profit_margins'=>[-1,1],
+        'gross_margins'=>[0,1],'operating_margins'=>[-1,1],'revenue_growth'=>[-1,2],
+        'earnings_growth'=>[-1,2],'debt_to_equity'=>[0,500],'current_ratio'=>[0,10],
+    ];
+}
+
 function flt_facets(): array {
     $pdo = db(); $tbl = t('screener');
+    $HARD = flt_hard_bounds();
+    // Udeluk korrupte aktier (mistænkt datakvalitet) fra domæne+histogram, så de ikke forgifter sliderne.
+    $clean = "(max_day_move <= 1 OR max_day_move IS NULL)";
     $out = ['ranges' => [], 'options' => []];
     foreach (flt_all() as $key => $f) {
         if ($f['type'] === 'range') {
             $col = $f['col']; $log = ($f['scale'] === 'log');
             $expr = $log ? "LOG10($col)" : $col;
-            $cond = "$col IS NOT NULL" . ($log ? " AND $col > 0" : "");
-            $s = $pdo->query("SELECT MIN($expr) mn, MAX($expr) mx, AVG($expr) av, STDDEV($expr) sd, COUNT(*) n
-                              FROM $tbl WHERE $cond")->fetch();
-            if (!$s || $s['n'] == 0) { $out['ranges'][$key] = null; continue; }
-            $mn = (float)$s['mn']; $mx = (float)$s['mx']; $av = (float)$s['av']; $sd = (float)$s['sd'];
-            $lo = $sd > 0 ? max($mn, $av - 3*$sd) : $mn;
-            $hi = $sd > 0 ? min($mx, $av + 3*$sd) : $mx;
-            if ($hi <= $lo) { $hi = $mx; $lo = $mn; }
-            if ($hi <= $lo) $hi = $lo + 1;
+            $cond = "$col IS NOT NULL" . ($log ? " AND $col > 0" : "") . " AND $clean";
+            if (isset($HARD[$key])) {
+                // sane hard-grænser
+                [$rlo, $rhi] = $HARD[$key];
+                $lo = $log ? log10(max($rlo, 1e-9)) : $rlo;
+                $hi = $log ? log10($rhi) : $rhi;
+                $realMn = $rlo; $realMx = $rhi;
+            } else {
+                // fallback: outlier-klippet mean±3σ
+                $s = $pdo->query("SELECT MIN($expr) mn, MAX($expr) mx, AVG($expr) av, STDDEV($expr) sd, COUNT(*) n
+                                  FROM $tbl WHERE $cond")->fetch();
+                if (!$s || $s['n'] == 0) { $out['ranges'][$key] = null; continue; }
+                $mn = (float)$s['mn']; $mx = (float)$s['mx']; $av = (float)$s['av']; $sd = (float)$s['sd'];
+                $lo = $sd > 0 ? max($mn, $av - 3*$sd) : $mn;
+                $hi = $sd > 0 ? min($mx, $av + 3*$sd) : $mx;
+                if ($hi <= $lo) { $hi = $mx; $lo = $mn; }
+                if ($hi <= $lo) $hi = $lo + 1;
+                $realMn = $log ? pow(10,$mn) : $mn; $realMx = $log ? pow(10,$mx) : $mx;
+            }
             $B = 24;
             $st = $pdo->prepare("SELECT LEAST($B-1, GREATEST(0, FLOOR(($expr - ?) / ? * $B))) b, COUNT(*) n
                 FROM $tbl WHERE $cond AND $expr BETWEEN ? AND ? GROUP BY b ORDER BY b");
@@ -203,9 +240,7 @@ function flt_facets(): array {
             // konverter bucket-grænser tilbage til rigtige enheder (log → 10^x)
             $edges = [];
             for ($i = 0; $i <= $B; $i++) { $x = $lo + ($hi-$lo)*$i/$B; $edges[] = $log ? pow(10,$x) : $x; }
-            // Slider-domæne = det outlier-klippede histogram-spænd (edges), så ekstreme
-            // outliers ikke gør slideren ubrugelig. Rå min/max gemmes som dmin/dmax.
-            $realMn = $log ? pow(10,$mn) : $mn; $realMx = $log ? pow(10,$mx) : $mx;
+            // Slider-domæne = de (hard-grænse eller outlier-klippede) edges; $realMn/$realMx er reference.
             $out['ranges'][$key] = ['min'=>$edges[0],'max'=>$edges[$B],'dmin'=>$realMn,'dmax'=>$realMx,
                 'scale'=>$f['scale'],'fmt'=>$f['fmt'],'edges'=>$edges,'counts'=>$counts];
         } else {
