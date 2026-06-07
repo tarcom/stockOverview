@@ -122,6 +122,8 @@
 .chart-controls .muted { font-size: .78rem; margin-left: auto; }
 .chart-canvas-wrap { position: relative; height: 360px; }
 @media (max-width: 900px) { .chart-canvas-wrap { height: 280px; } .chart-controls .muted { display: none; } }
+/* Lille navigator-graf under hovedgrafen (samme bredde, meget lavere). Træk feltet for at vælge periode. */
+.chart-mini-wrap { position: relative; height: 52px; margin-top: 4px; cursor: crosshair; }
 
 /* Klikbar række */
 .rtable .clickrow { cursor: pointer; }

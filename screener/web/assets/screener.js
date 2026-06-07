@@ -124,6 +124,7 @@ function wireControls() {
   $('#chartReset').addEventListener('click', drawOverlay);   // gentegn = fuld visning (nulstiller zoom + y)
   // Shift ved museknap-ned = box-zoom på vej → undgå y-autoskalering bagefter.
   $('#overlayChart').addEventListener('mousedown', e => { if (e.shiftKey) chartBoxZoom = true; });
+  wireMiniBrush();   // navigator-graf: træk feltet for at vælge periode
   // tabel-række → fremhæv linje i grafen
   $('#resultWrap').addEventListener('mouseover', e => { const tr = e.target.closest('.clickrow'); if (tr) emphasizeLine(tr.dataset.sym, true); });
   $('#resultWrap').addEventListener('mouseout', e => { const tr = e.target.closest('.clickrow'); if (tr) emphasizeLine(tr.dataset.sym, false); });
@@ -394,13 +395,116 @@ function drawOverlay() {
             drag: { enabled: true, modifierKey: 'shift',
                     backgroundColor: 'rgba(91,141,239,0.2)', borderColor: '#5b8def', borderWidth: 1 },
             mode: 'xy',
-            onZoomComplete: ({ chart }) => { if (chartBoxZoom) { chartBoxZoom = false; } else { autoScaleY(chart); } },
+            onZoomComplete: ({ chart }) => { if (chartBoxZoom) { chartBoxZoom = false; } else { autoScaleY(chart); } syncMiniFromBig(); },
           },
-          pan: { enabled: true, mode: 'x', onPanComplete: ({ chart }) => autoScaleY(chart) }, // træk = panorér x
+          pan: { enabled: true, mode: 'x', onPanComplete: ({ chart }) => { autoScaleY(chart); syncMiniFromBig(); } }, // træk = panorér x
         },
       },
     },
   });
+  // Navigator-graf: fuldt data-spænd, brush = det viste vindue (nulstilles til fuldt ved gentegn).
+  DATA_XMIN = isFinite(xmin) ? xmin : 0; DATA_XMAX = isFinite(xmax) ? xmax : 1;
+  MINI_SEL = { min: DATA_XMIN, max: DATA_XMAX };
+  drawMini(datasets);
+}
+
+// ---------- Navigator-graf (lille oversigt under hovedgrafen, Google-Finance-stil) ----------
+let miniChart = null, MINI_SEL = null, DATA_XMIN = 0, DATA_XMAX = 1, miniDrag = null;
+
+// Plugin: dæmp området udenfor det valgte vindue + tegn markerings-felt med håndtag.
+const miniBrush = {
+  id: 'miniBrush',
+  afterDraw(chart) {
+    if (!MINI_SEL) return;
+    const { ctx, chartArea: ca, scales: { x } } = chart;
+    const x1 = Math.max(ca.left, Math.min(ca.right, x.getPixelForValue(MINI_SEL.min)));
+    const x2 = Math.max(ca.left, Math.min(ca.right, x.getPixelForValue(MINI_SEL.max)));
+    ctx.save();
+    ctx.fillStyle = 'rgba(14,17,23,0.62)';
+    ctx.fillRect(ca.left, ca.top, x1 - ca.left, ca.height);
+    ctx.fillRect(x2, ca.top, ca.right - x2, ca.height);
+    ctx.fillStyle = 'rgba(91,141,239,0.10)';
+    ctx.fillRect(x1, ca.top, x2 - x1, ca.height);
+    ctx.strokeStyle = '#5b8def'; ctx.lineWidth = 1;
+    ctx.strokeRect(x1 + 0.5, ca.top + 0.5, x2 - x1 - 1, ca.height - 1);
+    ctx.fillStyle = '#5b8def';                                   // håndtag i hver side
+    ctx.fillRect(x1 - 1, ca.top, 3, ca.height); ctx.fillRect(x2 - 1, ca.top, 3, ca.height);
+    ctx.restore();
+  },
+};
+
+function drawMini(datasets) {
+  const thin = datasets.filter(ds => ds.symbol || ds.label).map(ds => ({
+    data: ds.data, borderColor: ds.borderColor, borderWidth: 0.8, pointRadius: 0,
+    tension: 0.1, borderDash: ds.borderDash, fill: false,
+  }));
+  if (miniChart) miniChart.destroy();
+  miniChart = new Chart($('#overlayMini'), {
+    type: 'line', data: { datasets: thin },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      events: [], interaction: { mode: null }, // ingen hover/tooltip — vi styrer selv via pointer-events
+      scales: {
+        x: { type: 'linear', min: DATA_XMIN, max: DATA_XMAX, display: false },
+        y: { display: false },
+      },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    },
+    plugins: [miniBrush],
+  });
+}
+
+// Sæt det store charts x-vindue ud fra brush'en (uden at røre mini'ens egen tilstand).
+function applyBrushToBig() {
+  if (!overlayChart || !MINI_SEL) return;
+  overlayChart.options.scales.x.min = MINI_SEL.min;
+  overlayChart.options.scales.x.max = MINI_SEL.max;
+  autoScaleY(overlayChart);   // kalder selv update()
+}
+// Opdatér brush'en ud fra det store charts aktuelle zoom (kaldes efter zoom/pan).
+function syncMiniFromBig() {
+  if (!overlayChart || !miniChart) return;
+  const xs = overlayChart.scales.x;
+  MINI_SEL = { min: Math.max(DATA_XMIN, xs.min), max: Math.min(DATA_XMAX, xs.max) };
+  miniChart.update('none');
+}
+
+// Pointer-styring på navigatoren: træk kanter (resize), træk midten (flyt), klik udenfor (nyt felt).
+function wireMiniBrush() {
+  const cv = $('#overlayMini');
+  const valAt = px => miniChart.scales.x.getValueForPixel(px);
+  const HANDLE = 7;
+  cv.addEventListener('pointerdown', e => {
+    if (!miniChart || !MINI_SEL) return;
+    const x = miniChart.scales.x, px = e.offsetX;
+    const x1 = x.getPixelForValue(MINI_SEL.min), x2 = x.getPixelForValue(MINI_SEL.max);
+    if (Math.abs(px - x1) <= HANDLE) miniDrag = { mode: 'l' };
+    else if (Math.abs(px - x2) <= HANDLE) miniDrag = { mode: 'r' };
+    else if (px > x1 && px < x2) miniDrag = { mode: 'move', startPx: px, snap: { ...MINI_SEL } };
+    else { const v = valAt(px); MINI_SEL = { min: v, max: v }; miniDrag = { mode: 'r' }; } // start nyt felt
+    cv.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!miniDrag || !miniChart) return;
+    const x = miniChart.scales.x, span = DATA_XMAX - DATA_XMIN, minW = span * 0.01;
+    const clamp = v => Math.max(DATA_XMIN, Math.min(DATA_XMAX, v));
+    if (miniDrag.mode === 'l') MINI_SEL.min = clamp(Math.min(valAt(e.offsetX), MINI_SEL.max - minW));
+    else if (miniDrag.mode === 'r') MINI_SEL.max = clamp(Math.max(valAt(e.offsetX), MINI_SEL.min + minW));
+    else if (miniDrag.mode === 'move') {
+      const d = valAt(e.offsetX) - valAt(miniDrag.startPx);
+      let lo = miniDrag.snap.min + d, hi = miniDrag.snap.max + d;
+      const w = hi - lo;
+      if (lo < DATA_XMIN) { lo = DATA_XMIN; hi = lo + w; }
+      if (hi > DATA_XMAX) { hi = DATA_XMAX; lo = hi - w; }
+      MINI_SEL = { min: lo, max: hi };
+    }
+    miniChart.update('none');
+    applyBrushToBig();
+  });
+  const end = e => { if (miniDrag) { miniDrag = null; try { cv.releasePointerCapture(e.pointerId); } catch (_) {} } };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
 }
 
 // Sættes når brugeren starter en Shift+træk (box-zoom), så y ikke auto-skaleres bagefter.
