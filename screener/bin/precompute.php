@@ -90,6 +90,10 @@ $secs = microtime(true) - $t0;
 printf("Færdig: %d aktier på %.1fs (%.0f/s). Med metrics: %d.\n", $done, $secs, $done/max(0.001,$secs), $withMetrics);
 logRun($pdo, 'precompute', $done, $withMetrics);
 
+// Markér krydsnoteringer (samme selskab på flere børser) → is_primary, så screeneren
+// kun viser hvert selskab én gang. SKAL køre før facetterne (de filtrerer is_primary=1).
+passthru(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/dedup.php'));
+
 // Forudberegn facetterne (histogrammer + slider-domæner) → cachet i DB, så web-portalen
 // svarer på ~1 ms i stedet for ~8 s (ellers ~80 fuld-tabel-scans pr. sideindlæsning).
 require __DIR__ . '/../web/lib/filters.php';

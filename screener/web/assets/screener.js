@@ -118,6 +118,7 @@ function wireControls() {
     refresh();
   });
   $('#hideJunk').addEventListener('change', refresh);
+  $('#allListings').addEventListener('change', refresh);
   $('#chartWindow').addEventListener('change', loadChart);  // ny periode → refetch
   $('#chartBench').addEventListener('change', loadChart);
   $('#chartLogY').addEventListener('change', drawOverlay);  // transformationer → kun gentegn
@@ -226,6 +227,7 @@ function collectParams() {
     p.delete('hj'); // ingen markør = default on; vi sætter hj=0 når slået fra
     p.set('hj', '0');
   }
+  if ($('#allListings').checked) p.set('alllistings', '1');   // vis sekundære krydsnoteringer
   p.set('sort', $('#sort').value);
   p.set('dir', $('#dirBtn').dataset.dir === 'asc' ? 'asc' : 'desc');
   p.set('limit', $('#limit').value);
@@ -281,7 +283,8 @@ function renderResults(rows, sort) {
     const yurl = EXT_QUOTE_URL + encodeURIComponent(r.symbol);
     h += `<tr data-sym="${escAttr(r.symbol)}" class="clickrow${isHidden(r.symbol) ? ' chart-hidden' : ''}" title="Klik for teknisk analyse">
       <td class="muted">${i+1}</td>
-      <td class="sym"><span class="ta-dot">📈</span> ${escHtml(r.symbol)}</td>
+      <td class="sym"><span class="ta-dot">📈</span> ${escHtml(r.symbol)}${String(r.is_primary) === '0'
+        ? ` <span class="sec-badge" title="Sekundær børsnotering på ${escAttr(r.exchange)}. Primær: ${escAttr(r.primary_symbol || '–')}">↪ ${escHtml(r.exchange)}</span>` : ''}</td>
       <td class="nm" title="${escAttr(r.name||'')}">${escHtml(trunc(r.name, 28))}</td>
       <td>${escHtml(r.sector||'–')}</td>
       <td>${escHtml(r.country||'–')}</td>
@@ -621,6 +624,7 @@ function cls(v) { v = +v; return v > 0 ? 'pos' : (v < 0 ? 'neg' : ''); }
 function applyStateFromURL() {
   const p = new URLSearchParams(location.search);
   if (p.get('hj') === '0') $('#hideJunk').checked = false;
+  if (p.get('alllistings') === '1') $('#allListings').checked = true;
   if (p.get('sort')) $('#sort').value = p.get('sort');
   if (p.get('limit')) $('#limit').value = p.get('limit');
   if (p.get('dir') === 'asc') { $('#dirBtn').dataset.dir = 'asc'; $('#dirBtn').textContent = '▲ Lavest'; }

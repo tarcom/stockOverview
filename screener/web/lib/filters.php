@@ -120,11 +120,14 @@ function flt_where(array $p): array {
             }
         }
     }
+    // Som standard kun primære noteringer (én pr. selskab); "alllistings=1" viser dubletter.
+    if (empty($p['alllistings'])) $where[] = "is_primary = 1";
     return [$where ? implode(' AND ', $where) : '1', $bind];
 }
 
-function flt_total(): int {
-    return (int) db()->query("SELECT COUNT(*) FROM " . t('screener'))->fetchColumn();
+function flt_total(array $p = []): int {
+    $w = empty($p['alllistings']) ? "is_primary = 1" : "1";
+    return (int) db()->query("SELECT COUNT(*) FROM " . t('screener') . " WHERE $w")->fetchColumn();
 }
 
 function flt_count(array $p): int {
@@ -142,7 +145,7 @@ function flt_funnel(array $p): array {
             if (is_numeric($p["{$key}_min"] ?? null) || is_numeric($p["{$key}_max"] ?? null)) $active[] = $f;
         } else if (($p[$key] ?? '') !== '') $active[] = $f;
     }
-    $steps = [['label' => 'Hele universet', 'n' => flt_total()]];
+    $steps = [['label' => 'Hele universet', 'n' => flt_total($p)]];
     $acc = [];
     foreach ($active as $f) {
         $acc[$f['key']] = $f;
@@ -162,7 +165,8 @@ function flt_results(array $p, string $sort, string $dir, int $limit): array {
     [$w, $b] = flt_where($p);
     $sort = in_array($sort, flt_sortable(), true) ? $sort : 'quality_1y';
     $dir = strtoupper($dir) === 'ASC' ? 'ASC' : 'DESC';
-    $cols = "symbol,name,sector,country,quote_type,currency,mkt_cap_usd,last_close,history_years,
+    $cols = "symbol,name,sector,country,quote_type,currency,exchange,is_primary,primary_symbol,listing_count,
+        mkt_cap_usd,last_close,history_years,
         quality_1y,quality_3y,cagr_1y,ret_1m,ret_6m,ret_1y,ret_3y,ret_5y,trend_r2_3y,maxdd_1y,
         sharpe_1y,vol_1y,beta_1y,mkt_r2_1y,rs_1y,trailing_pe,price_to_book,dividend_yield,return_on_equity";
     $sql = "SELECT $cols, $sort AS _sortval FROM " . t('screener') . " WHERE ($w) AND $sort IS NOT NULL ORDER BY $sort $dir LIMIT ?";
@@ -222,7 +226,8 @@ function flt_compute_facets(): array {
     $pdo = db(); $tbl = t('screener');
     $HARD = flt_hard_bounds();
     // Udeluk korrupte aktier (mistænkt datakvalitet) fra domæne+histogram, så de ikke forgifter sliderne.
-    $clean = "(max_day_move <= 1 OR max_day_move IS NULL)";
+    // Histogrammer/domæner over standard-visningen: kun primære noteringer + rene data.
+    $clean = "is_primary = 1 AND (max_day_move <= 1 OR max_day_move IS NULL)";
     $out = ['ranges' => [], 'options' => []];
     foreach (flt_all() as $key => $f) {
         if ($f['type'] === 'range') {

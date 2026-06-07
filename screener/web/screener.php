@@ -64,6 +64,9 @@ $presets = [
     <label class="dq-toggle"><input type="checkbox" id="hideJunk" checked>
       Skjul mistænkte datafejl
       <span class="info" title="Skjuler aktier med &gt;100% kursudsving på én dag — næsten altid korrupte kursdata. Slå fra for at se alt.">i</span></label>
+    <label class="dq-toggle"><input type="checkbox" id="allListings">
+      Vis alle børsnoteringer
+      <span class="info" title="Som standard vises hvert selskab kun én gang (dets primære børsnotering). Slå til for også at se sekundære krydsnoteringer på andre børser — fx samme aktie på Frankfurt, Mexico osv.">i</span></label>
 
     <section class="fgroup open favgroup" id="favGroup" data-group="fav" hidden>
       <h3 class="fgroup-h"><span class="caret">▸</span> ⭐ Favoritter <span class="grp-active"></span></h3>

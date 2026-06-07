@@ -62,7 +62,7 @@ try {
     $count = flt_count($_GET);
     echo json_encode([
         'count'   => $count,
-        'total'   => flt_total(),
+        'total'   => flt_total($_GET),
         'funnel'  => flt_funnel($_GET),
         'results' => $count > 0 ? flt_results($_GET, $sort, $dir, $limit) : [],
         'sort'    => $sort, 'dir' => $dir, 'limit' => $limit,

@@ -78,6 +78,18 @@ require __DIR__ . '/lib/filters.php';   // samme kilde som filter-tooltipsene (f
     </table>
   <?php endforeach; ?>
 
+  <h2>Krydsnoteringer (samme selskab på flere børser)</h2>
+  <p>Samme selskab handles ofte på flere børser — fx Western Digital som <code>WDC</code> (Nasdaq),
+  <code>WDC.F</code> (Frankfurt), <code>WDC.MX</code> (Mexico) og <code>WDC.VI</code> (Wien). Det er reelt
+  samme aktie, men med små forskelle i tal (anden valuta, likviditet og handelsdage). For ikke at fylde
+  listen med dubletter <strong>vælger vi automatisk ét primært listing pr. selskab</strong> og viser kun
+  det som standard.</p>
+  <p>Det primære listing vælges ud fra et <strong>børs-hierarki</strong> — amerikanske børser først, derefter
+  Norden og Vesteuropa, så Canada/Australien, så Asien, og til sidst regionale handelspladser og OTC — med
+  længst kurshistorik og største markedsværdi som tie-break. Vil du se alle noteringer, kan du slå
+  <strong>“Vis alle børsnoteringer”</strong> til øverst i filter-panelet; sekundære noteringer markeres da
+  med deres børs (fx <code>↪ FRA</code>).</p>
+
   <h2>Data &amp; opdatering</h2>
   <p>Screeneren bygger på <strong>markedsdata fra offentlige finansielle datakilder</strong>: op til 10 års
   daglig kurshistorik, udbytter og splits, samt fundamentale nøgletal pr. selskab. Alle nøgletal og

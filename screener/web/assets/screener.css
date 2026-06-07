@@ -264,3 +264,7 @@
 .rtable tr.chart-hidden { opacity: .5; }
 .rtable tr.chart-hidden td.sym { text-decoration: line-through; text-decoration-color: var(--muted); }
 .rtable tr.chart-hidden td.sym::after { content: " skjult i graf"; font-size: .68rem; color: var(--muted); text-decoration: none; font-style: italic; }
+
+/* Sekundær-børsnotering-badge (vises kun når "Vis alle børsnoteringer" er slået til) */
+.rtable .sec-badge { font-size: .68rem; color: var(--muted); background: var(--panel2);
+  border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; margin-left: .25rem; font-weight: 400; }
