@@ -19,7 +19,8 @@ try {
         $syms  = isset($_GET['symbols']) && $_GET['symbols'] !== '' ? explode('~', $_GET['symbols']) : [];
         $win   = $_GET['window'] ?? '3y';
         $bench = $_GET['bench'] ?? cfg()['rs_benchmark'];
-        echo json_encode(flt_chart($syms, $win, $bench));
+        $days  = isset($_GET['days']) && is_numeric($_GET['days']) ? (int)$_GET['days'] : null;
+        echo json_encode(flt_chart($syms, $win, $bench, $days));
         exit;
     }
     if ($action === 'stock') {

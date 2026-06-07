@@ -119,18 +119,24 @@ function wireControls() {
   });
   $('#hideJunk').addEventListener('change', refresh);
   $('#allListings').addEventListener('change', refresh);
-  $('#chartWindow').addEventListener('change', loadChart);  // ny periode → refetch
+  $('#chartWindow').addEventListener('change', () => { CHART_DAYS = WIN_DAYS[$('#chartWindow').value] || 1095; PENDING_VIEW = null; loadChart(); });
   $$('#periodBtns .pbtn').forEach(b => b.addEventListener('click', () => {   // hurtig-periode-knapper
     $$('#periodBtns .pbtn').forEach(x => x.classList.remove('on'));
     b.classList.add('on');
     $('#chartWindow').value = b.dataset.win;
+    CHART_DAYS = WIN_DAYS[b.dataset.win] || 1095;   // periode = fast vindue, fuld visning
+    PENDING_VIEW = null;
     loadChart();
   }));
   $('#chartBench').addEventListener('change', loadChart);
   $('#chartLogY').addEventListener('change', drawOverlay);  // transformationer → kun gentegn
   $('#chartRelative').addEventListener('change', drawOverlay);
   $('#chartEqual').addEventListener('change', drawOverlay);
-  $('#chartReset').addEventListener('click', drawOverlay);   // gentegn = fuld visning (nulstiller zoom + y)
+  $('#chartReset').addEventListener('click', () => {   // nulstil til standard 3Å-visning
+    $('#chartWindow').value = '3y'; CHART_DAYS = WIN_DAYS['3y']; PENDING_VIEW = null;
+    $$('#periodBtns .pbtn').forEach(x => x.classList.toggle('on', x.dataset.win === '3y'));
+    loadChart();
+  });
   // Shift ved museknap-ned = box-zoom på vej → undgå y-autoskalering bagefter.
   wireChartInteraction();   // scroll = højre-forankret x-zoom, træk = panorér
   wireMiniBrush();          // navigator-graf: træk feltet for at vælge periode
@@ -327,6 +333,10 @@ const CHART_PALETTE = ['#5b8def','#2ec4b6','#ff9f1c','#e71d73','#9b5de5','#00bbf
   '#f15bb5','#ffca3a','#ff70a6','#8ac926','#ff595e','#6a4c93','#1982c4','#52a675','#c77dff'];
 let overlayChart = null;
 let CHART_RAW = null;       // sidst hentede serier (til transformationer uden ny fetch)
+const WIN_DAYS = { '1m':30,'3m':91,'6m':182,'1y':365,'2y':730,'3y':1095,'5y':1826,'10y':3652,'max':36500 };
+const MAX_CHART_DAYS = 36500;
+let CHART_DAYS = 1095;      // hvor mange dages data der hentes (glidende ved zoom)
+let PENDING_VIEW = null;    // {min,max}: sæt dette x-vindue efter næste load (i st.f. fuld visning)
 
 // Aksens dato-format: vis årstal ved første tick og når året skifter, ellers kun måned.
 function axisDateFmt(v, i, ticks) {
@@ -341,7 +351,7 @@ async function loadChart() {
   if (!syms.length) { CHART_RAW = null; if (overlayChart) { overlayChart.destroy(); overlayChart = null; } clearSparklines(); loadDone(); return; }
   const win = $('#chartWindow').value, bench = $('#chartBench').value;
   try {
-    const q = new URLSearchParams({ action: 'chart', symbols: syms.join('~'), window: win, bench });
+    const q = new URLSearchParams({ action: 'chart', symbols: syms.join('~'), window: win, bench, days: Math.round(CHART_DAYS) });
     CHART_RAW = await (await fetch('api.php?' + q.toString())).json();
   } catch (e) { loadDone(); return; }
   drawOverlay();
@@ -415,9 +425,18 @@ function drawOverlay() {
     },
     plugins: [crosshair, spanLabel],
   });
-  // Navigator-graf: fuldt data-spænd, brush = det viste vindue (nulstilles til fuldt ved gentegn).
+  // Navigator-graf: fuldt data-spænd. Normalt nulstilles visningen til fuld; men efter en
+  // glidende zoom-hentning bevarer vi det vindue brugeren var i gang med (PENDING_VIEW).
   DATA_XMIN = isFinite(xmin) ? xmin : 0; DATA_XMAX = isFinite(xmax) ? xmax : 1;
-  MINI_SEL = { min: DATA_XMIN, max: DATA_XMAX };
+  if (PENDING_VIEW) {
+    const vmin = Math.max(DATA_XMIN, PENDING_VIEW.min), vmax = Math.min(DATA_XMAX, PENDING_VIEW.max);
+    PENDING_VIEW = null;
+    overlayChart.options.scales.x.min = vmin; overlayChart.options.scales.x.max = vmax;
+    MINI_SEL = { min: vmin, max: vmax };
+    autoScaleY(overlayChart, vmin, vmax);
+  } else {
+    MINI_SEL = { min: DATA_XMIN, max: DATA_XMAX };
+  }
   drawMini(datasets);
 }
 
@@ -549,18 +568,17 @@ function setXWindow(min, max) {
   syncMiniFromBig();
 }
 
-// Når man zoomer ud forbi det hentede spænd: hent næste større tidsvindue (op til Maks),
-// så grafen progressivt afslører mere historik uden at man skal vælge periode manuelt.
-const WIN_SEQ = ['1m', '3m', '6m', '1y', '2y', '3y', '5y', '10y', 'max'];
+// Glidende zoom-hentning: når man zoomer ud forbi det hentede spænd (eller ind så det
+// hentede er meget grovere end nødvendigt), hentes data der passer til det viste spænd,
+// så historikken afsløres jævnt op til Maks i stedet for i store spring.
 let growingWindow = false;
-function growWindow() {
-  if (growingWindow) return;
-  const cur = $('#chartWindow').value, i = WIN_SEQ.indexOf(cur);
-  if (i < 0 || i >= WIN_SEQ.length - 1) return;          // allerede Maks
-  const next = WIN_SEQ[i + 1];
+function refetchSpan(days, viewMin, viewMax) {
+  days = Math.min(MAX_CHART_DAYS, Math.max(20, Math.round(days)));
+  if (growingWindow || days === Math.round(CHART_DAYS)) { setXWindow(Math.max(viewMin, DATA_XMIN), viewMax); return; }
   growingWindow = true;
-  $('#chartWindow').value = next;
-  $$('#periodBtns .pbtn').forEach(x => x.classList.toggle('on', x.dataset.win === next));
+  CHART_DAYS = days;
+  PENDING_VIEW = { min: viewMin, max: viewMax };
+  $$('#periodBtns .pbtn').forEach(x => x.classList.remove('on'));   // custom spænd → ingen fast knap markeret
   Promise.resolve(loadChart()).finally(() => { growingWindow = false; });
 }
 
@@ -568,18 +586,22 @@ function growWindow() {
 // HØJRE kant (nyeste data bevares); træk = panorér. y auto-fittes altid bagefter.
 function wireChartInteraction() {
   const cv = $('#overlayChart');
+  const DAY = 86400000;
   cv.addEventListener('wheel', e => {
     if (!overlayChart) return;
     e.preventDefault();
     const xs = overlayChart.scales.x, right = xs.max, span = xs.max - xs.min;
-    const full = DATA_XMAX - DATA_XMIN;
-    // Zoom UD og allerede ved hele det hentede spænd → hent et større tidsvindue (op til Maks).
-    if (e.deltaY > 0 && xs.min <= DATA_XMIN + full * 0.002) { growWindow(); return; }
-    const factor = e.deltaY < 0 ? 0.82 : 1 / 0.82;                 // ind = mindre span
-    const newSpan = Math.max(full * 0.01, Math.min(full, span * factor));
-    let min = right - newSpan;
-    if (min < DATA_XMIN) min = DATA_XMIN;                          // forankr højre, skær fra venstre
-    setXWindow(min, right);
+    const factor = e.deltaY < 0 ? 0.82 : 1 / 0.82;
+    const newSpan = Math.max(7 * DAY, span * factor);              // mindst ~1 uge
+    const targetMin = right - newSpan, targetDays = newSpan / DAY;
+    if (e.deltaY > 0) {                                            // ZOOM UD
+      if (targetMin >= DATA_XMIN - span * 0.002) { setXWindow(Math.max(targetMin, DATA_XMIN), right); return; }
+      if (CHART_DAYS >= MAX_CHART_DAYS - 1) { setXWindow(DATA_XMIN, right); return; }   // alt er hentet
+      refetchSpan(targetDays * 1.6, targetMin, right);             // hent glidende lidt mere
+    } else {                                                       // ZOOM IND
+      setXWindow(Math.max(targetMin, DATA_XMIN), right);
+      if (CHART_DAYS > targetDays * 4 && CHART_DAYS > 400) refetchSpan(targetDays * 2, Math.max(targetMin, DATA_XMIN), right);
+    }
   }, { passive: false });
 
   let pan = null;

@@ -314,13 +314,15 @@ function base100(array $pts): array {
  * Base-100 tidsserier for de viste aktier + et benchmark-indeks, over et tidsvindue.
  * Læser rå dagshistorik (kun for de få viste symboler) og downsampler til ~220 punkter.
  */
-function flt_chart(array $symbols, string $window, string $bench): array {
+function flt_chart(array $symbols, string $window, string $bench, ?int $days = null): array {
     // Op til 60 serier: overlay-grafen tegner kun de øverste ~16 (klient-side), men
     // tabellens trend-sparklines har brug for data til ALLE viste rækker.
     $symbols = array_slice(array_values(array_filter($symbols, fn($s) => $s !== '')), 0, 60);
     $window  = ($window === 'max' || array_key_exists($window, array_flip(flt_windows()))) ? $window : '3y';
-    $cutoff  = (new DateTime('-' . win_days($window) . ' days'))->format('Y-m-d');
-    $out = ['window' => $window, 'series' => [], 'bench' => null];
+    // 'days' (glidende zoom) overstyrer det navngivne vindue; ellers brug vinduets dage.
+    $cutDays = ($days !== null && $days > 0) ? min($days, 36500) : win_days($window);
+    $cutoff  = (new DateTime('-' . $cutDays . ' days'))->format('Y-m-d');
+    $out = ['window' => $window, 'days' => $cutDays, 'series' => [], 'bench' => null];
 
     if ($symbols) {
         $ph = implode(',', array_fill(0, count($symbols), '?'));
