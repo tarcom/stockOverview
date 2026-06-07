@@ -186,8 +186,8 @@ $presets = [
     <div class="modal-sub muted"></div>
     <div class="ta-controls">
       <label>Periode <select id="taWindow">
-        <?php foreach (['6m','1y','2y','3y','5y','10y'] as $w): ?>
-          <option value="<?= $w ?>"<?= $w==='2y'?' selected':'' ?>><?= strtoupper($w) ?></option>
+        <?php foreach (['6m'=>'6M','1y'=>'1Å','2y'=>'2Å','3y'=>'3Å','5y'=>'5Å','10y'=>'10Å','max'=>'Maks'] as $w=>$lbl): ?>
+          <option value="<?= $w ?>"<?= $w==='2y'?' selected':'' ?>><?= $lbl ?></option>
         <?php endforeach; ?>
       </select></label>
       <span class="ta-smas">SMA

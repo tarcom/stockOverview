@@ -413,7 +413,7 @@ function drawOverlay() {
         zoom: { zoom: { wheel: { enabled: false }, pinch: { enabled: false }, drag: { enabled: false } }, pan: { enabled: false } },
       },
     },
-    plugins: [crosshair],
+    plugins: [crosshair, spanLabel],
   });
   // Navigator-graf: fuldt data-spænd, brush = det viste vindue (nulstilles til fuldt ved gentegn).
   DATA_XMIN = isFinite(xmin) ? xmin : 0; DATA_XMAX = isFinite(xmax) ? xmax : 1;
@@ -465,6 +465,31 @@ const crosshair = {
     const dateStr = new Date(pt.x).toLocaleDateString('da-DK', { day: '2-digit', month: 'short', year: 'numeric' });
     crosshairLabel(ctx, px, ca.bottom + 4, dateStr, 'x', ca);
     crosshairLabel(ctx, ca.left - 4, py, pt.y.toFixed(1) + '%', 'y', ca);
+    ctx.restore();
+  },
+};
+
+// Lille indikator (øverst til venstre) der viser hvor langt et tidsspænd grafen viser.
+function spanText(days) {
+  if (days < 14) return Math.max(1, Math.round(days)) + ' dage';
+  if (days < 70) return Math.round(days / 7) + ' uger';
+  if (days < 730) return Math.round(days / 30.44) + ' mdr.';
+  return (Math.round(days / 365.25 * 10) / 10).toString().replace('.', ',') + ' år';
+}
+const spanLabel = {
+  id: 'spanLabel',
+  afterDraw(chart) {
+    const xs = chart.scales.x;
+    if (!isFinite(xs.min) || !isFinite(xs.max)) return;
+    const txt = '⟷ ' + spanText((xs.max - xs.min) / 86400000);
+    const { ctx, chartArea: ca } = chart;
+    ctx.save();
+    ctx.font = '600 11px system-ui, sans-serif';
+    const w = ctx.measureText(txt).width + 12;
+    ctx.fillStyle = 'rgba(22,27,34,0.82)';
+    ctx.fillRect(ca.left + 6, ca.top + 6, w, 19);
+    ctx.fillStyle = '#9aa4b2'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(txt, ca.left + 12, ca.top + 16);
     ctx.restore();
   },
 };
@@ -524,6 +549,21 @@ function setXWindow(min, max) {
   syncMiniFromBig();
 }
 
+// Når man zoomer ud forbi det hentede spænd: hent næste større tidsvindue (op til Maks),
+// så grafen progressivt afslører mere historik uden at man skal vælge periode manuelt.
+const WIN_SEQ = ['1m', '3m', '6m', '1y', '2y', '3y', '5y', '10y', 'max'];
+let growingWindow = false;
+function growWindow() {
+  if (growingWindow) return;
+  const cur = $('#chartWindow').value, i = WIN_SEQ.indexOf(cur);
+  if (i < 0 || i >= WIN_SEQ.length - 1) return;          // allerede Maks
+  const next = WIN_SEQ[i + 1];
+  growingWindow = true;
+  $('#chartWindow').value = next;
+  $$('#periodBtns .pbtn').forEach(x => x.classList.toggle('on', x.dataset.win === next));
+  Promise.resolve(loadChart()).finally(() => { growingWindow = false; });
+}
+
 // Custom zoom/pan på hovedgrafen (TradingView-stil): scroll = x-zoom forankret til
 // HØJRE kant (nyeste data bevares); træk = panorér. y auto-fittes altid bagefter.
 function wireChartInteraction() {
@@ -533,6 +573,8 @@ function wireChartInteraction() {
     e.preventDefault();
     const xs = overlayChart.scales.x, right = xs.max, span = xs.max - xs.min;
     const full = DATA_XMAX - DATA_XMIN;
+    // Zoom UD og allerede ved hele det hentede spænd → hent et større tidsvindue (op til Maks).
+    if (e.deltaY > 0 && xs.min <= DATA_XMIN + full * 0.002) { growWindow(); return; }
     const factor = e.deltaY < 0 ? 0.82 : 1 / 0.82;                 // ind = mindre span
     const newSpan = Math.max(full * 0.01, Math.min(full, span * factor));
     let min = right - newSpan;
