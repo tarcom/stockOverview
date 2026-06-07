@@ -965,6 +965,7 @@ function escAttr(s) { return String(s ?? '').replace(/"/g, '&quot;').replace(/[&
 
 // ============ Teknisk analyse (fokus-view ved klik på række) ============
 let taPriceChart = null, taSubCharts = [], TA_DATA = null;
+let TA_SYM = null, TA_DAYS = 730, TA_VIEW = null, TA_PENDING_VIEW = null, TA_XMIN = 0, TA_XMAX = 1;
 
 function initTA() {
   $('#resultWrap').addEventListener('click', e => {
@@ -972,19 +973,27 @@ function initTA() {
   });
   $('#modalClose').addEventListener('click', closeStock);
   $('#stockModal').addEventListener('click', e => { if (e.target.id === 'stockModal') closeStock(); });
-  $('#taWindow').addEventListener('change', () => { if (TA_DATA) openStock(TA_DATA.symbol); });
+  $('#taWindow').addEventListener('change', () => {   // periode = fast vindue, fuld visning
+    TA_DAYS = WIN_DAYS[$('#taWindow').value] || 1095; TA_VIEW = null; TA_PENDING_VIEW = null; if (TA_SYM) fetchTA();
+  });
   $('#taBench').addEventListener('change', renderTA);
   $$('.ta-sub').forEach(c => c.addEventListener('change', renderTA));
   $$('.ta-smas input').forEach(c => c.addEventListener('change', renderTA));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeStock(); });
+  wireTAInteraction();   // zoom/pan synkront på pris + indikator-paneler
 }
 
-async function openStock(sym) {
+async function openStock(sym) {           // ny aktie → nulstil zoom + vindue
   const m = $('#stockModal'); m.hidden = false;
   $('.m-sym', m).textContent = sym; $('.m-name', m).textContent = '…';
   $('.m-yahoo', m).href = EXT_QUOTE_URL + encodeURIComponent(sym);
+  TA_SYM = sym; TA_DAYS = WIN_DAYS[$('#taWindow').value] || 1095; TA_VIEW = null; TA_PENDING_VIEW = null;
+  await fetchTA();
+}
+async function fetchTA() {                 // (gen)hent TA-data for TA_SYM med TA_DAYS
+  const m = $('#stockModal');
   try {
-    const q = new URLSearchParams({ action: 'stock', symbol: sym, window: $('#taWindow').value });
+    const q = new URLSearchParams({ action: 'stock', symbol: TA_SYM, window: $('#taWindow').value, days: Math.round(TA_DAYS) });
     TA_DATA = await (await fetch('api.php?' + q.toString())).json();
   } catch (e) { $('.m-name', m).textContent = 'kunne ikke hente data'; return; }
   $('.m-name', m).textContent = TA_DATA.name || '';
@@ -1063,7 +1072,9 @@ function renderTA() {
       borderColor: '#e6edf3', borderWidth: 2, borderDash: [6, 4], pointRadius: 0, tension: .1 });
   }
   if (taPriceChart) taPriceChart.destroy();
-  taPriceChart = new Chart($('#taPrice'), { type: 'line', data: { datasets: ds }, options: baseOpts('Base 100', xmin, xmax) });
+  taPriceChart = new Chart($('#taPrice'), { type: 'line', data: { datasets: ds }, options: baseOpts('Base 100', xmin, xmax), plugins: [spanLabel] });
+  taPriceChart.$taType = 'price';
+  TA_XMIN = xmin; TA_XMAX = xmax;
 
   // Nederste paneler: 0-3 valgte indikatorer (RSI/MACD/Volumen), hver i sin egen rude.
   taSubCharts.forEach(c => c.destroy()); taSubCharts = [];
@@ -1073,8 +1084,72 @@ function renderTA() {
     if (!cfg) return;
     const pane = document.createElement('div'); pane.className = 'ta-pane';
     const cv = document.createElement('canvas'); pane.appendChild(cv); container.appendChild(pane);
-    taSubCharts.push(new Chart(cv, { type: 'line', data: { datasets: cfg.sds }, options: cfg.opts }));
+    const sc = new Chart(cv, { type: 'line', data: { datasets: cfg.sds }, options: cfg.opts });
+    sc.$taType = c.value;
+    taSubCharts.push(sc);
   });
+  // Genskab zoom efter gentegn (SMA/sub-toggle) eller efter glidende hentning.
+  const v = TA_PENDING_VIEW || TA_VIEW;
+  if (v) { TA_PENDING_VIEW = null; setTAView(Math.max(TA_XMIN, v.min), Math.min(TA_XMAX, v.max)); }
+}
+
+// Sæt det viste x-vindue på pris + alle indikator-paneler synkront (+ auto-fit y).
+function setTAView(min, max) {
+  TA_VIEW = (min <= TA_XMIN && max >= TA_XMAX) ? null : { min, max };   // fuld visning = ingen zoom
+  [taPriceChart, ...taSubCharts].forEach(ch => {
+    if (!ch) return;
+    ch.options.scales.x.min = min; ch.options.scales.x.max = max;
+    taFitY(ch, min, max);
+  });
+}
+function taFitY(ch, min, max) {
+  if (ch.$taType === 'rsi') { ch.update('none'); return; }        // RSI: behold fast 0-100
+  let lo = Infinity, hi = -Infinity;
+  ch.data.datasets.forEach((d, i) => { if (ch.getDatasetMeta(i).hidden) return;
+    d.data.forEach(pt => { const y = pt.y; if (y != null && pt.x >= min && pt.x <= max) { if (y < lo) lo = y; if (y > hi) hi = y; } }); });
+  if (!isFinite(lo) || !isFinite(hi)) { ch.update('none'); return; }
+  const pad = (hi - lo) * 0.05 || Math.abs(hi) * 0.05 || 1;
+  ch.options.scales.y.min = ch.$taType === 'vol' ? 0 : lo - pad;
+  ch.options.scales.y.max = hi + pad;
+  ch.update('none');
+}
+
+// Zoom/pan på TA — samme følelse som hovedgrafen, synkront på tværs af alle paneler.
+function wireTAInteraction() {
+  const area = $('#taZoomArea'); if (!area) return;
+  const DAY = 86400000; let taGrowing = false, tpan = null;
+  function taRefetch(days, vmin, vmax) {
+    days = Math.min(MAX_CHART_DAYS, Math.max(20, Math.round(days)));
+    if (taGrowing || days === Math.round(TA_DAYS)) { setTAView(Math.max(vmin, TA_XMIN), vmax); return; }
+    taGrowing = true; TA_DAYS = days; TA_PENDING_VIEW = { min: vmin, max: vmax };
+    Promise.resolve(fetchTA()).finally(() => { taGrowing = false; });
+  }
+  area.addEventListener('wheel', e => {
+    if (!taPriceChart) return; e.preventDefault();
+    const xs = taPriceChart.scales.x, right = xs.max, span = xs.max - xs.min;
+    const factor = e.deltaY < 0 ? 0.82 : 1 / 0.82;
+    const newSpan = Math.max(7 * DAY, span * factor), targetMin = right - newSpan, targetDays = newSpan / DAY;
+    if (e.deltaY > 0) {
+      if (targetMin >= TA_XMIN - span * 0.002) { setTAView(Math.max(targetMin, TA_XMIN), right); return; }
+      if (TA_DAYS >= MAX_CHART_DAYS - 1) { setTAView(TA_XMIN, right); return; }
+      taRefetch(targetDays * 1.6, targetMin, right);
+    } else {
+      setTAView(Math.max(targetMin, TA_XMIN), right);
+      if (TA_DAYS > targetDays * 4 && TA_DAYS > 400) taRefetch(targetDays * 2, Math.max(targetMin, TA_XMIN), right);
+    }
+  }, { passive: false });
+  area.addEventListener('pointerdown', e => { if (e.button !== 0 || !taPriceChart) return;
+    tpan = { x: e.clientX, min: taPriceChart.scales.x.min, max: taPriceChart.scales.x.max }; area.style.cursor = 'grabbing'; });
+  area.addEventListener('pointermove', e => { if (!tpan) return;
+    const xs = taPriceChart.scales.x, msPerPx = (tpan.max - tpan.min) / (xs.right - xs.left), span = tpan.max - tpan.min;
+    let min = tpan.min - (e.clientX - tpan.x) * msPerPx, max = min + span;
+    if (min < TA_XMIN) { min = TA_XMIN; max = min + span; }
+    if (max > TA_XMAX) { max = TA_XMAX; min = max - span; }
+    setTAView(min, max);
+  });
+  const endp = () => { if (tpan) { tpan = null; area.style.cursor = ''; } };
+  area.addEventListener('pointerup', endp); area.addEventListener('pointercancel', endp);
+  area.addEventListener('dblclick', () => { if (taPriceChart) setTAView(TA_XMIN, TA_XMAX); });
 }
 
 // Bygger datasæt + options for ét nederste indikator-panel.

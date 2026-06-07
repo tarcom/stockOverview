@@ -24,7 +24,8 @@ try {
         exit;
     }
     if ($action === 'stock') {
-        echo json_encode(flt_stock($_GET['symbol'] ?? '', $_GET['window'] ?? '3y'));
+        $sdays = isset($_GET['days']) && is_numeric($_GET['days']) ? (int)$_GET['days'] : null;
+        echo json_encode(flt_stock($_GET['symbol'] ?? '', $_GET['window'] ?? '3y', $sdays));
         exit;
     }
     // Per-bruger data (gemte screens / favorit-filtre / skjulte graf-aktier).

@@ -204,8 +204,11 @@ $presets = [
         <label><input type="checkbox" class="ta-sub" value="vol"> Volumen</label>
       <span class="info" title="Slå til/fra uafhængigt (0-3 paneler). RSI: momentum 0-100 (>70 overkøbt, <30 oversolgt). MACD: forskel mellem 12- og 26-dages EMA + signallinje — krydsninger antyder trendskift. Volumen: handelsmængde pr. dag.">i</span></span>
     </div>
-    <div class="ta-main"><canvas id="taPrice"></canvas></div>
-    <div id="taSubPanes"></div>
+    <div id="taZoomArea">
+      <div class="ta-main"><canvas id="taPrice"></canvas></div>
+      <div id="taSubPanes"></div>
+    </div>
+    <div class="chart-help muted" style="margin:.3rem 0 0">scroll = zoom tid · træk = panorér · dobbeltklik = nulstil — pris og indikatorer følges ad</div>
 
     <div class="ta-details">
       <div class="ta-block">

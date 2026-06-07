@@ -355,9 +355,10 @@ function flt_chart(array $symbols, string $window, string $bench, ?int $days = n
  * Daglig serie (fuld opløsning) for ÉN aktie over et vindue + benchmark — til fokus-view
  * med tekniske indikatorer (SMA/RSI/MACD/volumen beregnes klientside af den rå serie).
  */
-function flt_stock(string $symbol, string $window): array {
+function flt_stock(string $symbol, string $window, ?int $days = null): array {
     $window = ($window === 'max' || in_array($window, flt_windows(), true)) ? $window : '3y';
-    $cutoff = (new DateTime('-' . win_days($window) . ' days'))->format('Y-m-d');
+    $cutDays = ($days !== null && $days > 0) ? min($days, 36500) : win_days($window);
+    $cutoff = (new DateTime('-' . $cutDays . ' days'))->format('Y-m-d');
     $st = db()->prepare("SELECT price_date, COALESCE(adj_close, close) p, volume FROM " . t('prices') . "
         WHERE symbol = ? AND price_date >= ? AND COALESCE(adj_close, close) IS NOT NULL ORDER BY price_date");
     $st->execute([$symbol, $cutoff]);
