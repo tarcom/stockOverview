@@ -94,10 +94,15 @@ function wireControls() {
     refresh();
   });
   $('#hideJunk').addEventListener('change', refresh);
-  $('#chartWindow').addEventListener('change', loadChart);
+  $('#chartWindow').addEventListener('change', loadChart);  // ny periode → refetch
   $('#chartBench').addEventListener('change', loadChart);
-  $('#chartLogY').addEventListener('change', loadChart);
-  $('#chartReset').addEventListener('click', () => { if (overlayChart) overlayChart.resetZoom(); });
+  $('#chartLogY').addEventListener('change', drawOverlay);  // transformationer → kun gentegn
+  $('#chartRelative').addEventListener('change', drawOverlay);
+  $('#chartEqual').addEventListener('change', drawOverlay);
+  $('#chartReset').addEventListener('click', () => { REBASE_TS = null; drawOverlay(); });
+  // tabel-række → fremhæv linje i grafen
+  $('#resultWrap').addEventListener('mouseover', e => { const tr = e.target.closest('.clickrow'); if (tr) emphasizeLine(tr.dataset.sym, true); });
+  $('#resultWrap').addEventListener('mouseout', e => { const tr = e.target.closest('.clickrow'); if (tr) emphasizeLine(tr.dataset.sym, false); });
   $('#resetBtn').addEventListener('click', resetAll);
   $$('.preset').forEach(b => b.addEventListener('click', () => applyPreset(b.dataset.preset)));
   $('#csvBtn').addEventListener('click', () => { window.location = 'api.php?action=csv&' + collectParams().toString(); });
@@ -235,7 +240,7 @@ function renderResults(rows, sort) {
   let h = `<table class="rtable"><thead><tr>
     <th>#</th><th>Symbol</th><th>Navn</th><th>Sektor</th><th>Land</th><th class="num">Mkt cap</th>
     <th class="num hl">${escHtml(sortLbl)}</th><th class="num">Afkast 1Y</th><th class="num">Kvalitet 3Y</th>
-    <th class="num">P/E</th><th class="num">Udbytte</th><th></th></tr></thead><tbody>`;
+    <th class="num">P/E</th><th class="num">Udbytte</th><th>Trend</th><th></th></tr></thead><tbody>`;
   rows.forEach((r, i) => {
     const yurl = EXT_QUOTE_URL + encodeURIComponent(r.symbol);
     h += `<tr data-sym="${escAttr(r.symbol)}" class="clickrow" title="Klik for teknisk analyse">
@@ -250,6 +255,7 @@ function renderResults(rows, sort) {
       <td class="num">${fmtVal(+r.quality_3y, 'num')}</td>
       <td class="num">${fmtVal(+r.trailing_pe, 'num')}</td>
       <td class="num">${fmtVal(+r.dividend_yield, 'pct')}</td>
+      <td class="spark"><canvas class="sparkcanvas" data-sym="${escAttr(r.symbol)}" width="80" height="22"></canvas></td>
       <td class="ylink"><a href="${yurl}" target="_blank" rel="noopener" title="Åbn aktiens eksterne detaljeside" onclick="event.stopPropagation()">↗</a></td>
     </tr>`;
   });
@@ -263,36 +269,57 @@ function renderResults(rows, sort) {
 const CHART_PALETTE = ['#5b8def','#2ec4b6','#ff9f1c','#e71d73','#9b5de5','#00bbf9','#80ed99',
   '#f15bb5','#ffca3a','#ff70a6','#8ac926','#ff595e','#6a4c93','#1982c4','#52a675','#c77dff'];
 let overlayChart = null;
+let CHART_RAW = null;       // sidst hentede serier (til transformationer uden ny fetch)
+let REBASE_TS = null;       // klik-dato til re-indeksering (null = fra start)
+
+// Aksens dato-format: vis årstal ved første tick og når året skifter, ellers kun måned.
+function axisDateFmt(v, i, ticks) {
+  const d = new Date(v);
+  const m = d.toLocaleDateString('da-DK', { month: 'short' });
+  const showYear = i === 0 || !ticks[i-1] || new Date(ticks[i-1].value).getFullYear() !== d.getFullYear();
+  return showYear ? m + ' ' + d.getFullYear() : m;
+}
 
 async function loadChart() {
   const syms = (window.CURRENT_SYMBOLS || []).slice(0, 16);
-  const cv = $('#overlayChart');
-  if (!syms.length) { if (overlayChart) { overlayChart.destroy(); overlayChart = null; } return; }
+  if (!syms.length) { CHART_RAW = null; if (overlayChart) { overlayChart.destroy(); overlayChart = null; } clearSparklines(); return; }
   const win = $('#chartWindow').value, bench = $('#chartBench').value;
-  let d;
   try {
     const q = new URLSearchParams({ action: 'chart', symbols: syms.join('~'), window: win, bench });
-    d = await (await fetch('api.php?' + q.toString())).json();
+    CHART_RAW = await (await fetch('api.php?' + q.toString())).json();
   } catch (e) { return; }
+  REBASE_TS = null;          // ny data → base fra start
+  drawOverlay();
+  drawSparklines();
+}
 
-  const datasets = (d.series || []).map((s, i) => ({
-    label: s.symbol, symbol: s.symbol,
-    data: s.points.map(p => ({ x: Date.parse(p[0]), y: p[1] })),
-    borderColor: CHART_PALETTE[i % CHART_PALETTE.length],
-    backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
-    borderWidth: 1.5, pointRadius: 0, tension: 0.1,
-  }));
-  if (d.bench && d.bench.points.length) {
-    datasets.push({
-      label: d.bench.label + ' (benchmark)',
-      data: d.bench.points.map(p => ({ x: Date.parse(p[0]), y: p[1] })),
-      borderColor: '#e6edf3', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 0, tension: 0.1,
-    });
+// Bygger/gentegner overlay-grafen ud fra CHART_RAW + transformationer (relativ, ligevægt, rebase).
+function drawOverlay() {
+  if (!CHART_RAW) return;
+  const relative = $('#chartRelative').checked;
+  const benchMap = CHART_RAW.bench ? Object.fromEntries(CHART_RAW.bench.points.map(p => [p[0], p[1]])) : null;
+  const reb = arr => REBASE_TS == null ? arr : rebaseSeries(arr, REBASE_TS);
+
+  const datasets = (CHART_RAW.series || []).map((s, i) => {
+    let pts = s.points.map(p => [Date.parse(p[0]), p[1]]);
+    if (relative && benchMap) pts = pts.map((q, j) => [q[0], benchMap[s.points[j][0]] ? q[1] / benchMap[s.points[j][0]] * 100 : null]);
+    return { label: s.symbol, symbol: s.symbol, data: reb(pts).map(([t, y]) => ({ x: t, y })),
+      borderColor: CHART_PALETTE[i % CHART_PALETTE.length], borderWidth: 1.5, pointRadius: 0, tension: 0.1 };
+  });
+  if (CHART_RAW.bench && CHART_RAW.bench.points.length && !relative) {
+    const bpts = reb(CHART_RAW.bench.points.map(p => [Date.parse(p[0]), p[1]]));
+    datasets.push({ label: CHART_RAW.bench.label + ' (benchmark)', data: bpts.map(([t, y]) => ({ x: t, y })),
+      borderColor: '#e6edf3', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 0, tension: 0.1 });
   }
+  if ($('#chartEqual').checked) {
+    const avg = equalWeightLine(datasets.filter(ds => ds.symbol));
+    if (avg.length) datasets.push({ label: 'Ligevægt (gns.)', symbol: null, data: avg,
+      borderColor: '#ffca3a', borderWidth: 3, pointRadius: 0, tension: 0.1, borderDash: [2, 2] });
+  }
+
   if (overlayChart) overlayChart.destroy();
-  overlayChart = new Chart(cv, {
-    type: 'line',
-    data: { datasets },
+  overlayChart = new Chart($('#overlayChart'), {
+    type: 'line', data: { datasets },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       interaction: { mode: 'nearest', intersect: false },
@@ -303,28 +330,72 @@ async function loadChart() {
           if (sym) { const tr = document.querySelector('.rtable tr[data-sym="' + sym + '"]'); if (tr) tr.classList.add('hl-row'); }
         }
       },
+      onClick: (e, els, chart) => {                 // klik på en dato → re-indekser derfra
+        const ts = chart.scales.x.getValueForPixel(e.x);
+        if (ts) { REBASE_TS = ts; drawOverlay(); }
+      },
       scales: {
-        x: { type: 'linear', ticks: { color: '#9aa4b2', maxTicksLimit: 8,
-              callback: v => new Date(v).toLocaleDateString('da-DK', { year: '2-digit', month: 'short' }) },
-             grid: { color: '#1c2330' } },
+        x: { type: 'linear', ticks: { color: '#9aa4b2', maxTicksLimit: 8, callback: axisDateFmt }, grid: { color: '#1c2330' } },
         y: { type: $('#chartLogY').checked ? 'logarithmic' : 'linear',
              ticks: { color: '#9aa4b2' }, grid: { color: '#1c2330' },
-             title: { display: true, text: 'Base 100', color: '#9aa4b2' } },
+             title: { display: true, text: relative ? 'Relativt til benchmark (100=match)' : 'Base 100', color: '#9aa4b2' } },
       },
       plugins: {
-        legend: { position: 'bottom', labels: { color: '#cbd3df', boxWidth: 12, font: { size: 11 } } },
+        legend: { position: 'bottom', labels: { color: '#cbd3df', boxWidth: 12, font: { size: 11 } },
+          onClick: (e, item) => {                   // klik forklaring → teknisk analyse
+            const ds = overlayChart.data.datasets[item.datasetIndex];
+            if (ds && ds.symbol) openStock(ds.symbol);
+            else { const m = overlayChart.getDatasetMeta(item.datasetIndex); m.hidden = !m.hidden; overlayChart.update(); }
+          } },
         tooltip: { callbacks: {
           title: items => items.length ? new Date(items[0].parsed.x).toLocaleDateString('da-DK') : '',
           label: c => { const s = c.dataset.symbol; const nm = s ? (window.SYMBOL_NAMES[s] || s) : c.dataset.label;
             return `${nm}: ${c.parsed.y.toFixed(1)}`; },
         } },
-        zoom: {
-          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' },
-          pan: { enabled: true, mode: 'xy' },
-        },
+        zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }, pan: { enabled: true, mode: 'xy' } },
       },
     },
   });
+}
+
+// Re-indekser en serie [[t,y],...] til 100 ved punktet nærmest $ts.
+function rebaseSeries(pts, ts) {
+  let best = null, bestD = Infinity;
+  for (const [t, y] of pts) { const d = Math.abs(t - ts); if (y != null && d < bestD) { bestD = d; best = y; } }
+  if (!best) return pts;
+  return pts.map(([t, y]) => [t, y == null ? null : y / best * 100]);
+}
+// Gennemsnitslinje på tværs af datasæt (ligevægts-portefølje).
+function equalWeightLine(datasets) {
+  const acc = {};
+  datasets.forEach(ds => ds.data.forEach(pt => { if (pt.y != null) { (acc[pt.x] = acc[pt.x] || []).push(pt.y); } }));
+  return Object.keys(acc).map(Number).sort((a, b) => a - b)
+    .map(x => ({ x, y: acc[x].reduce((s, v) => s + v, 0) / acc[x].length }));
+}
+
+// ---------- sparklines i tabellen (genbruger graf-data) ----------
+function drawSparklines() {
+  const map = {}; (CHART_RAW && CHART_RAW.series || []).forEach(s => map[s.symbol] = s.points);
+  $$('.sparkcanvas').forEach(cv => drawSpark(cv, map[cv.dataset.sym]));
+}
+function clearSparklines() { $$('.sparkcanvas').forEach(cv => { const c = cv.getContext('2d'); c.clearRect(0, 0, cv.width, cv.height); }); }
+function drawSpark(cv, pts) {
+  const ctx = cv.getContext('2d'), w = cv.width, h = cv.height; ctx.clearRect(0, 0, w, h);
+  if (!pts || pts.length < 2) return;
+  const ys = pts.map(p => p[1]); let mn = Math.min(...ys), mx = Math.max(...ys); if (mx === mn) mx = mn + 1;
+  ctx.strokeStyle = ys[ys.length - 1] >= ys[0] ? '#3fb950' : '#f85149'; ctx.lineWidth = 1; ctx.beginPath();
+  pts.forEach((p, i) => {
+    const x = (i / (pts.length - 1)) * (w - 2) + 1;
+    const y = h - 1 - ((p[1] - mn) / (mx - mn)) * (h - 2);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+// Tabel-række → fremhæv aktiens linje i grafen.
+function emphasizeLine(sym, on) {
+  if (!overlayChart) return;
+  const ds = overlayChart.data.datasets.find(d => d.symbol === sym);
+  if (ds) { ds.borderWidth = on ? 4 : 1.5; overlayChart.update('none'); }
 }
 function fmtCol(col, v) {
   v = +v;
@@ -629,7 +700,7 @@ function baseOpts(yTitle) {
     interaction: { mode: 'index', intersect: false },
     scales: {
       x: { type: 'linear', ticks: { color: '#9aa4b2', maxTicksLimit: 8,
-            callback: v => new Date(v).toLocaleDateString('da-DK', { year: '2-digit', month: 'short' }) }, grid: { color: '#1c2330' } },
+            callback: axisDateFmt }, grid: { color: '#1c2330' } },
       y: { ticks: { color: '#9aa4b2' }, grid: { color: '#1c2330' }, title: { display: true, text: yTitle, color: '#9aa4b2' } },
     },
     plugins: { legend: { position: 'bottom', labels: { color: '#cbd3df', boxWidth: 12, font: { size: 10 } } } },

@@ -135,10 +135,12 @@ $presets = [
           <option value="">(ingen)</option>
         </select></label>
         <label title="Logaritmisk y-akse — gør at en enkelt aktie med ekstrem stigning ikke klemmer de andre flade"><input type="checkbox" id="chartLogY"> Log y-akse</label>
-        <button id="chartReset" class="btn-ghost" title="Nulstil zoom/panorering">⟲ Nulstil zoom</button>
+        <label title="Vis hver aktie relativt til benchmark (flad linje = følger markedet)"><input type="checkbox" id="chartRelative"> Relativ til benchmark</label>
+        <label title="Tilføj en linje = gennemsnittet af de viste aktier (ligevægts-portefølje)"><input type="checkbox" id="chartEqual"> Ligevægts-linje</label>
+        <button id="chartReset" class="btn-ghost" title="Nulstil zoom, panorering og base-dato">⟲ Nulstil</button>
       </div>
       <div class="chart-canvas-wrap"><canvas id="overlayChart"></canvas></div>
-      <div class="chart-help muted">Alle indekseret til 100 ved start · <strong>scroll</strong> for at zoome, <strong>træk</strong> for at panorere · klik i forklaringen for at skjule/vise linjer · hold musen over for navn</div>
+      <div class="chart-help muted">Indekseret til 100 ved start (eller <strong>klik en dato</strong> for at re-indeksere derfra) · <strong>scroll</strong> = zoom, <strong>træk</strong> = panorér · klik i forklaringen for teknisk analyse · hold musen over for navn + highlight i tabellen</div>
     </div>
 
     <div id="resultWrap" class="result-wrap"><div class="loading">Indlæser…</div></div>

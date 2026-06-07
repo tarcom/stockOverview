@@ -217,3 +217,7 @@
 .rtable tr.hl-row td { background: rgba(91,141,239,.20) !important; }
 /* Hjælpe-tekst under grafen (flyttet ud af controls-baren) */
 .chart-help { font-size: .78rem; margin-top: .55rem; }
+
+/* Sparkline-celle i tabellen */
+.rtable td.spark { padding: 0 .4rem; width: 88px; }
+.sparkcanvas { display: block; }
