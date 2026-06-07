@@ -227,6 +227,11 @@ function windowMetrics(array $sub, array $spx): ?array {
 
     $maxdd = max(-1.0, $maxdd);                       // drawdown er matematisk i [-1,0]
     if ($beta !== null && abs($beta) > 5) $beta = null; // |beta|>5 = ustabil regression/korrupt
+    // Korrupte metrics fra penny-/illikvide aktier (kurs 0,001→1 = ekstrem hældning, eller
+    // vol≈0 → sharpe i millioner). Realistisk er |quality|≲5 og |sharpe|≲5, så ekstreme
+    // værdier nulstilles → de forsvinder fra sorteringen i stedet for at dominere toppen.
+    if ($quality !== null && abs($quality) > 10) $quality = null;
+    if ($sharpe  !== null && abs($sharpe)  > 10) $sharpe  = null;
     return [
         'ret'=>r($ret), 'cagr'=>r($cagr), 'quality'=>r($quality), 'trend_r2'=>r($r2log),
         'lin_r2'=>r($r2lin), 'vol'=>r($vol), 'maxdd'=>r($maxdd), 'sharpe'=>r($sharpe),
