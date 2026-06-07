@@ -315,8 +315,10 @@ function base100(array $pts): array {
  * Læser rå dagshistorik (kun for de få viste symboler) og downsampler til ~220 punkter.
  */
 function flt_chart(array $symbols, string $window, string $bench): array {
-    $symbols = array_slice(array_values(array_filter($symbols, fn($s) => $s !== '')), 0, 16);
-    $window  = array_key_exists($window, array_flip(flt_windows())) ? $window : '3y';
+    // Op til 60 serier: overlay-grafen tegner kun de øverste ~16 (klient-side), men
+    // tabellens trend-sparklines har brug for data til ALLE viste rækker.
+    $symbols = array_slice(array_values(array_filter($symbols, fn($s) => $s !== '')), 0, 60);
+    $window  = ($window === 'max' || array_key_exists($window, array_flip(flt_windows()))) ? $window : '3y';
     $cutoff  = (new DateTime('-' . win_days($window) . ' days'))->format('Y-m-d');
     $out = ['window' => $window, 'series' => [], 'bench' => null];
 
