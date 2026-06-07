@@ -398,7 +398,7 @@ function drawOverlay() {
         x: { type: 'linear', min: isFinite(xmin) ? xmin : undefined, max: isFinite(xmax) ? xmax : undefined,
              ticks: { color: '#9aa4b2', maxTicksLimit: 8, callback: axisDateFmt }, grid: { color: '#1c2330' } },
         y: { type: $('#chartLogY').checked ? 'logarithmic' : 'linear',
-             ticks: { color: '#9aa4b2', callback: v => v + '%' }, grid: { color: '#1c2330' },
+             ticks: { color: '#9aa4b2', callback: v => +(+v).toFixed(1) + '%' }, grid: { color: '#1c2330' },
              title: { display: true, text: relative ? 'Relativt til benchmark (%, 100=match)' : 'Base 100 (%)', color: '#9aa4b2' } },
       },
       plugins: {
