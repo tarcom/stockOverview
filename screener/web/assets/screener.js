@@ -75,6 +75,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   initFavorites();
   applyStateFromURL();
   const params = new URLSearchParams(location.search); // læs FØR refresh() (som rydder URL'en)
+  if (params.get('rel') === '1') $('#chartRelative').checked = true;   // til verificering/deling
+  if (params.get('eq') === '1') $('#chartEqual').checked = true;
+  if (params.get('logy') === '1') $('#chartLogY').checked = true;
   const ta = params.get('ta'), preset = params.get('preset');
   if (preset && (window.PRESETS || {})[preset]) applyPreset(preset); // deep-link til preset
   else refresh();
@@ -237,10 +240,17 @@ function renderFunnel(funnel) {
 function renderResults(rows, sort) {
   if (!rows || !rows.length) { $('#resultWrap').innerHTML = '<div class="empty-r">Ingen aktier matcher. Løsn et filter.</div>'; return; }
   const sortLbl = (window.SORT_OPTS && window.SORT_OPTS[sort]) || sort;
+  const I = t => `<span class="info" title="${escAttr(t)}">i</span>`;
   let h = `<table class="rtable"><thead><tr>
-    <th>#</th><th>Symbol</th><th>Navn</th><th>Sektor</th><th>Land</th><th class="num">Mkt cap</th>
-    <th class="num hl">${escHtml(sortLbl)}</th><th class="num">Afkast 1Y</th><th class="num">Kvalitet 3Y</th>
-    <th class="num">P/E</th><th class="num">Udbytte</th><th>Trend</th><th></th></tr></thead><tbody>`;
+    <th>#</th><th>Symbol</th><th>Navn</th><th>Sektor</th><th>Land</th>
+    <th class="num">Mkt cap ${I('Markedsværdi i USD (omregnet, så aktier kan sammenlignes på tværs af børser).')}</th>
+    <th class="num hl">${escHtml(sortLbl)} ${I('Den metric du sorterer efter — vælg i "Sortér" ovenfor.')}</th>
+    <th class="num">Afkast 1Y ${I('Samlet kursafkast de seneste 12 måneder.')}</th>
+    <th class="num">Kvalitet 3Y ${I('Kvalitets-score over 3 år: annualiseret eksponentiel vækst × R² (belønner stabil OG høj vækst).')}</th>
+    <th class="num">P/E ${I('Kurs ÷ indtjening seneste 12 mdr. Negativ eller meningsløs indtjening vises som N/A.')}</th>
+    <th class="num">Udbytte ${I('Årligt udbytte ÷ kurs.')}</th>
+    <th>Trend ${I('Mini-kursgraf over den valgte graf-periode (skift under "Periode" på grafen ovenfor — pt. det samme spænd som overlay-grafen).')}</th>
+    <th></th></tr></thead><tbody>`;
   rows.forEach((r, i) => {
     const yurl = EXT_QUOTE_URL + encodeURIComponent(r.symbol);
     h += `<tr data-sym="${escAttr(r.symbol)}" class="clickrow" title="Klik for teknisk analyse">
@@ -297,12 +307,14 @@ async function loadChart() {
 function drawOverlay() {
   if (!CHART_RAW) return;
   const relative = $('#chartRelative').checked;
-  const benchMap = CHART_RAW.bench ? Object.fromEntries(CHART_RAW.bench.points.map(p => [p[0], p[1]])) : null;
+  // Forward-fill benchmark (aktier og benchmark har forskellige handelsdage; eksakt
+  // dato-match gav huller). benchFF(dato) = seneste benchmark-værdi på/før datoen.
+  const benchFF = (CHART_RAW.bench && CHART_RAW.bench.points.length) ? makeFFill(CHART_RAW.bench.points) : null;
   const reb = arr => REBASE_TS == null ? arr : rebaseSeries(arr, REBASE_TS);
 
   const datasets = (CHART_RAW.series || []).map((s, i) => {
     let pts = s.points.map(p => [Date.parse(p[0]), p[1]]);
-    if (relative && benchMap) pts = pts.map((q, j) => [q[0], benchMap[s.points[j][0]] ? q[1] / benchMap[s.points[j][0]] * 100 : null]);
+    if (relative && benchFF) pts = s.points.map(p => { const b = benchFF(p[0]); return [Date.parse(p[0]), b ? p[1] / b * 100 : null]; });
     return { label: s.symbol, symbol: s.symbol, data: reb(pts).map(([t, y]) => ({ x: t, y })),
       borderColor: CHART_PALETTE[i % CHART_PALETTE.length], borderWidth: 1.5, pointRadius: 0, tension: 0.1 };
   });
@@ -358,7 +370,16 @@ function drawOverlay() {
           label: c => { const s = c.dataset.symbol; const nm = s ? (window.SYMBOL_NAMES[s] || s) : c.dataset.label;
             return `${nm}: ${c.parsed.y.toFixed(1)}`; },
         } },
-        zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }, pan: { enabled: true, mode: 'xy' } },
+        zoom: {
+          zoom: {
+            wheel: { enabled: true },                  // scroll = zoom (x+y)
+            pinch: { enabled: true },
+            drag: { enabled: true, modifierKey: 'shift', // Shift+træk = zoom ind på et område
+                    backgroundColor: 'rgba(91,141,239,0.2)', borderColor: '#5b8def', borderWidth: 1 },
+            mode: 'xy',
+          },
+          pan: { enabled: true, mode: 'xy' },            // træk = panorér
+        },
       },
     },
   });
@@ -371,12 +392,27 @@ function rebaseSeries(pts, ts) {
   if (!best) return pts;
   return pts.map(([t, y]) => [t, y == null ? null : y / best * 100]);
 }
-// Gennemsnitslinje på tværs af datasæt (ligevægts-portefølje).
+// Forward-fill-opslag: returnerer en funktion dato-streng → seneste værdi på/før datoen.
+function makeFFill(points) {
+  const ds = points.map(p => p[0]), ys = points.map(p => p[1]);
+  return d => {
+    let lo = 0, hi = ds.length - 1, res = null;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (ds[m] <= d) { res = ys[m]; lo = m + 1; } else hi = m - 1; }
+    return res;
+  };
+}
+// Ligevægts-linje: gennemsnit på et FÆLLES dato-gitter (forward-fill pr. aktie), så
+// linjen ikke hopper pga. at forskellige aktier handler på forskellige dage.
 function equalWeightLine(datasets) {
-  const acc = {};
-  datasets.forEach(ds => ds.data.forEach(pt => { if (pt.y != null) { (acc[pt.x] = acc[pt.x] || []).push(pt.y); } }));
-  return Object.keys(acc).map(Number).sort((a, b) => a - b)
-    .map(x => ({ x, y: acc[x].reduce((s, v) => s + v, 0) / acc[x].length }));
+  const grid = [...new Set(datasets.flatMap(ds => ds.data.filter(p => p.y != null).map(p => p.x)))].sort((a, b) => a - b);
+  if (!grid.length) return [];
+  const ffs = datasets.map(ds => {
+    const pts = ds.data.filter(p => p.y != null).sort((a, b) => a.x - b.x);
+    let i = 0;
+    return grid.map(x => { while (i + 1 < pts.length && pts[i + 1].x <= x) i++; return (pts.length && pts[0].x <= x) ? pts[i].y : null; });
+  });
+  return grid.map((x, gi) => { let s = 0, n = 0; ffs.forEach(f => { if (f[gi] != null) { s += f[gi]; n++; } }); return n ? { x, y: s / n } : null; })
+    .filter(Boolean);
 }
 
 // ---------- sparklines i tabellen (genbruger graf-data) ----------

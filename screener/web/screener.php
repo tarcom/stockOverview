@@ -140,7 +140,7 @@ $presets = [
         <button id="chartReset" class="btn-ghost" title="Nulstil zoom, panorering og base-dato">⟲ Nulstil</button>
       </div>
       <div class="chart-canvas-wrap"><canvas id="overlayChart"></canvas></div>
-      <div class="chart-help muted">Indekseret til 100 ved start (eller <strong>klik en dato</strong> for at re-indeksere derfra) · <strong>scroll</strong> = zoom, <strong>træk</strong> = panorér · klik i forklaringen for teknisk analyse · hold musen over for navn + highlight i tabellen</div>
+      <div class="chart-help muted">Indekseret til 100 ved start (eller <strong>klik en dato</strong> for at re-indeksere) · <strong>scroll</strong> = zoom, <strong>træk</strong> = panorér, <strong>Shift+træk</strong> = zoom ind på et område · klik i forklaringen → teknisk analyse · musen over = navn + highlight i tabellen</div>
     </div>
 
     <div id="resultWrap" class="result-wrap"><div class="loading">Indlæser…</div></div>
