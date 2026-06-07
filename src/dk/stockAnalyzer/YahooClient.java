@@ -374,13 +374,13 @@ public class YahooClient {
 
     /**
      * Henter daglig OHLCV-historik via v8/chart.
-     * period1Sec == null  -> hele 10-års vinduet (range=10y), brugt til fuld backfill.
+     * period1Sec == null  -> HELE den tilgængelige historik (range=max), brugt til fuld backfill.
      * period1Sec != null  -> kun fra det tidspunkt og frem (inkrementel daglig kørsel).
      */
     public static DailyHistory getDailyHistory(String symbol, Long period1Sec) throws IOException {
         String url;
         if (period1Sec == null) {
-            url = CHART_URL + enc(symbol) + "?range=10y&interval=1d&events=div,split";
+            url = CHART_URL + enc(symbol) + "?range=max&interval=1d&events=div,split";
         } else {
             long now = System.currentTimeMillis() / 1000L;
             url = CHART_URL + enc(symbol) + "?period1=" + period1Sec + "&period2=" + now

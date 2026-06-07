@@ -14,8 +14,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Data-ingestion til screener-databasen. For hvert symbol:
- *   1) kurser via v8/chart  — fuld 10-års backfill første gang, ellers kun nye dage
- *      (inkrementel ud fra MAX(price_date) i DB) → stockOverview_prices/_dividends/_splits
+ *   1) kurser via v8/chart  — fuld backfill af HELE historikken (range=max) første gang,
+ *      ellers kun nye dage (inkrementel ud fra MAX(price_date) i DB). INGEST_BACKFILL_ALL=1
+ *      tvinger fuld gen-hentning af alle → stockOverview_prices/_dividends/_splits
  *   2) fundamentals via v10/quoteSummary → stockOverview_securities + _fundamentals (snapshot)
  *   3) status i stockOverview_ingest_log (resumerbar; status='not_found' OG symboler
  *      hentet OK inden for RESUME_WINDOW_DAYS springes over — så en afbrudt nat-backfill
@@ -43,6 +44,11 @@ public class Ingest {
     private static volatile int total = 0;
     private static volatile long startTime = 0;
 
+    /** INGEST_BACKFILL_ALL=1: tving fuld gen-hentning af HELE historikken (range=max) for
+     *  alle symboler — også dem der allerede har data. Brug det én gang til at hente
+     *  historik længere tilbage end de 10 år der tidligere blev gemt. Implicerer FORCE. */
+    private static final boolean BACKFILL_ALL = "1".equals(System.getenv("INGEST_BACKFILL_ALL"));
+
     public static void main(String[] args) throws Exception {
         int limit = -1;
         if (args.length > 0) {
@@ -55,7 +61,8 @@ public class Ingest {
         // RESUME_WINDOW_DAYS over — så en afbrudt nat-backfill kan genoptages over flere
         // nætter (kør bare igen; den fortsætter hvor den slap). INGEST_FORCE=1 gen-henter alt
         // (brug det til den daglige inkrementelle kørsel, hvor alle tickers skal opdateres).
-        boolean force = "1".equals(System.getenv("INGEST_FORCE"));
+        boolean force = "1".equals(System.getenv("INGEST_FORCE")) || BACKFILL_ALL;
+        if (BACKFILL_ALL) System.out.println("INGEST_BACKFILL_ALL=1: fuld gen-hentning af hele historikken (range=max) for alle symboler.");
         Set<String> skip;
         try (Connection conn = StockDb.getConnection()) {
             StockDb.ensureSchema(conn);
@@ -104,8 +111,8 @@ public class Ingest {
     private static void ingestOne(String symbol) {
         try (Connection conn = StockDb.getConnection()) {
             LocalDate last = StockDb.getLastPriceDate(conn, symbol);
-            Long period1 = null; // null => fuld 10-års backfill
-            if (last != null) {
+            Long period1 = null; // null => fuld backfill (range=max)
+            if (last != null && !BACKFILL_ALL) {
                 // re-hent et lille overlap for at fange korrektioner
                 period1 = last.minusDays(4).atStartOfDay(ZoneOffset.UTC).toEpochSecond();
             } else {
