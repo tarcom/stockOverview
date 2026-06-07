@@ -43,8 +43,10 @@ function flt_groups(): array {
 
     $mkt = [
         f('beta_1y', 'Beta 1Y', 'lin', 'num', 'Følsomhed over for S&P500. ~1 = følger markedet, >1 = forstærker, <1 = dæmper.'),
-        f('mkt_r2_1y', 'Markeds-korrelation² 1Y', 'lin', 'num', 'Hvor stor del af udsvingene der forklares af S&P500 (0-1). Høj = bevæger sig i takt med markedet; lav = idiosynkratisk/tilfældig volatilitet.'),
     ];
+    foreach (['1y','3y','5y'] as $w)
+        $mkt[] = f("mkt_r2_$w", 'Markeds-korrelation² '.strtoupper($w), 'lin', 'num',
+            'Hvor stor del af udsvingene der forklares af S&P500 (0-1) over '.win_label($w).'. Høj = bevæger sig i takt med markedet; lav = idiosynkratisk/tilfældig volatilitet.');
     foreach (['1y','3y','5y'] as $w) $mkt[] = f("rs_$w", 'Relativ styrke '.strtoupper($w), 'lin', 'pct', 'Merafkast vs S&P500 over '.win_label($w).'. Positiv = slår markedet.');
 
     return [
@@ -205,7 +207,8 @@ function flt_hard_bounds(): array {
         'ret_2y'=>[-1,5],'ret_3y'=>[-1,8],'ret_5y'=>[-1,15],'ret_10y'=>[-1,30],
         'cagr_1y'=>[-1,3],'cagr_3y'=>[-1,2],'cagr_5y'=>[-1,1],
         'quality_1y'=>[-1,3],'quality_2y'=>[-1,4],'quality_3y'=>[-1,2],'quality_5y'=>[-1,1],
-        'trend_r2_1y'=>[0,1],'trend_r2_3y'=>[0,1],'trend_r2_5y'=>[0,1],'mkt_r2_1y'=>[0,1],
+        'trend_r2_1y'=>[0,1],'trend_r2_3y'=>[0,1],'trend_r2_5y'=>[0,1],
+        'mkt_r2_1y'=>[0,1],'mkt_r2_3y'=>[0,1],'mkt_r2_5y'=>[0,1],
         'maxdd_1y'=>[-1,0],'maxdd_3y'=>[-1,0],'sharpe_1y'=>[-3,5],'sharpe_3y'=>[-3,3],'vol_1y'=>[0,1.5],
         'beta_1y'=>[-2,3],'rs_1y'=>[-1,3],'rs_3y'=>[-1,5],'rs_5y'=>[-1,10],
         'trailing_pe'=>[0,100],'forward_pe'=>[0,100],'peg_ratio'=>[0,10],'price_to_book'=>[0,20],
