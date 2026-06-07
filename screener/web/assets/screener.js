@@ -102,7 +102,9 @@ function wireControls() {
   $('#chartLogY').addEventListener('change', drawOverlay);  // transformationer → kun gentegn
   $('#chartRelative').addEventListener('change', drawOverlay);
   $('#chartEqual').addEventListener('change', drawOverlay);
-  $('#chartReset').addEventListener('click', () => { REBASE_TS = null; drawOverlay(); });
+  $('#chartReset').addEventListener('click', drawOverlay);   // gentegn = fuld visning (nulstiller zoom + y)
+  // Shift ved museknap-ned = box-zoom på vej → undgå y-autoskalering bagefter.
+  $('#overlayChart').addEventListener('mousedown', e => { if (e.shiftKey) chartBoxZoom = true; });
   // tabel-række → fremhæv linje i grafen
   $('#resultWrap').addEventListener('mouseover', e => { const tr = e.target.closest('.clickrow'); if (tr) emphasizeLine(tr.dataset.sym, true); });
   $('#resultWrap').addEventListener('mouseout', e => { const tr = e.target.closest('.clickrow'); if (tr) emphasizeLine(tr.dataset.sym, false); });
@@ -280,7 +282,6 @@ const CHART_PALETTE = ['#5b8def','#2ec4b6','#ff9f1c','#e71d73','#9b5de5','#00bbf
   '#f15bb5','#ffca3a','#ff70a6','#8ac926','#ff595e','#6a4c93','#1982c4','#52a675','#c77dff'];
 let overlayChart = null;
 let CHART_RAW = null;       // sidst hentede serier (til transformationer uden ny fetch)
-let REBASE_TS = null;       // klik-dato til re-indeksering (null = fra start)
 
 // Aksens dato-format: vis årstal ved første tick og når året skifter, ellers kun måned.
 function axisDateFmt(v, i, ticks) {
@@ -298,7 +299,6 @@ async function loadChart() {
     const q = new URLSearchParams({ action: 'chart', symbols: syms.join('~'), window: win, bench });
     CHART_RAW = await (await fetch('api.php?' + q.toString())).json();
   } catch (e) { return; }
-  REBASE_TS = null;          // ny data → base fra start
   drawOverlay();
   drawSparklines();
 }
@@ -310,17 +310,16 @@ function drawOverlay() {
   // Forward-fill benchmark (aktier og benchmark har forskellige handelsdage; eksakt
   // dato-match gav huller). benchFF(dato) = seneste benchmark-værdi på/før datoen.
   const benchFF = (CHART_RAW.bench && CHART_RAW.bench.points.length) ? makeFFill(CHART_RAW.bench.points) : null;
-  const reb = arr => REBASE_TS == null ? arr : rebaseSeries(arr, REBASE_TS);
 
   const datasets = (CHART_RAW.series || []).map((s, i) => {
     let pts = s.points.map(p => [Date.parse(p[0]), p[1]]);
     if (relative && benchFF) pts = s.points.map(p => { const b = benchFF(p[0]); return [Date.parse(p[0]), b ? p[1] / b * 100 : null]; });
-    return { label: s.symbol, symbol: s.symbol, data: reb(pts).map(([t, y]) => ({ x: t, y })),
+    return { label: s.symbol, symbol: s.symbol, data: pts.map(([t, y]) => ({ x: t, y })),
       borderColor: CHART_PALETTE[i % CHART_PALETTE.length], borderWidth: 1.5, pointRadius: 0, tension: 0.1 };
   });
   if (CHART_RAW.bench && CHART_RAW.bench.points.length && !relative) {
-    const bpts = reb(CHART_RAW.bench.points.map(p => [Date.parse(p[0]), p[1]]));
-    datasets.push({ label: CHART_RAW.bench.label + ' (benchmark)', data: bpts.map(([t, y]) => ({ x: t, y })),
+    datasets.push({ label: CHART_RAW.bench.label + ' (benchmark)',
+      data: CHART_RAW.bench.points.map(p => ({ x: Date.parse(p[0]), y: p[1] })),
       borderColor: '#e6edf3', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 0, tension: 0.1 });
   }
   if ($('#chartEqual').checked) {
@@ -347,10 +346,6 @@ function drawOverlay() {
           if (sym) { const tr = document.querySelector('.rtable tr[data-sym="' + sym + '"]'); if (tr) tr.classList.add('hl-row'); }
         }
       },
-      onClick: (e, els, chart) => {                 // klik på en dato → re-indekser derfra
-        const ts = chart.scales.x.getValueForPixel(e.x);
-        if (ts) { REBASE_TS = ts; drawOverlay(); }
-      },
       scales: {
         x: { type: 'linear', min: isFinite(xmin) ? xmin : undefined, max: isFinite(xmax) ? xmax : undefined,
              ticks: { color: '#9aa4b2', maxTicksLimit: 8, callback: axisDateFmt }, grid: { color: '#1c2330' } },
@@ -371,26 +366,39 @@ function drawOverlay() {
             return `${nm}: ${c.parsed.y.toFixed(1)}`; },
         } },
         zoom: {
+          // scroll/pinch zoomer x; y auto-skaleres bagefter til det viste vindue.
+          // Shift+træk = box-zoom på et område (x+y) — y bevares som tegnet.
           zoom: {
-            wheel: { enabled: true },                  // scroll = zoom (x+y)
+            wheel: { enabled: true },
             pinch: { enabled: true },
-            drag: { enabled: true, modifierKey: 'shift', // Shift+træk = zoom ind på et område
+            drag: { enabled: true, modifierKey: 'shift',
                     backgroundColor: 'rgba(91,141,239,0.2)', borderColor: '#5b8def', borderWidth: 1 },
             mode: 'xy',
+            onZoomComplete: ({ chart }) => { if (chartBoxZoom) { chartBoxZoom = false; } else { autoScaleY(chart); } },
           },
-          pan: { enabled: true, mode: 'xy' },            // træk = panorér
+          pan: { enabled: true, mode: 'x', onPanComplete: ({ chart }) => autoScaleY(chart) }, // træk = panorér x
         },
       },
     },
   });
 }
 
-// Re-indekser en serie [[t,y],...] til 100 ved punktet nærmest $ts.
-function rebaseSeries(pts, ts) {
-  let best = null, bestD = Infinity;
-  for (const [t, y] of pts) { const d = Math.abs(t - ts); if (y != null && d < bestD) { bestD = d; best = y; } }
-  if (!best) return pts;
-  return pts.map(([t, y]) => [t, y == null ? null : y / best * 100]);
+// Sættes når brugeren starter en Shift+træk (box-zoom), så y ikke auto-skaleres bagefter.
+let chartBoxZoom = false;
+// Skalér y-aksen til min/max for de synlige datapunkter i det aktuelle x-vindue (+ 5% luft).
+function autoScaleY(chart) {
+  const xs = chart.scales.x, xmin = xs.min, xmax = xs.max;
+  let lo = Infinity, hi = -Infinity;
+  chart.data.datasets.forEach((ds, i) => {
+    if (chart.getDatasetMeta(i).hidden) return;
+    ds.data.forEach(pt => { if (pt.y != null && pt.x >= xmin && pt.x <= xmax) { if (pt.y < lo) lo = pt.y; if (pt.y > hi) hi = pt.y; } });
+  });
+  if (!isFinite(lo) || !isFinite(hi)) return;
+  const pad = (hi - lo) * 0.05 || Math.abs(hi) * 0.05 || 1;
+  const isLog = chart.options.scales.y.type === 'logarithmic';
+  chart.options.scales.y.min = isLog ? Math.max(lo * 0.95, lo > 0 ? lo * 0.5 : 0.01) : lo - pad;
+  chart.options.scales.y.max = hi + pad;
+  chart.update('none');
 }
 // Forward-fill-opslag: returnerer en funktion dato-streng → seneste værdi på/før datoen.
 function makeFFill(points) {
