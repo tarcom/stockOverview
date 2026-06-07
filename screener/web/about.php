@@ -38,6 +38,20 @@ require __DIR__ . '/lib/filters.php';   // samme kilde som filter-tooltipsene (f
   <h2>Alle filtre forklaret</h2>
   <p>Hvert filter på <a href="screener.php">Screener</a>-siden har en lille <span class="info-inline">i</span>
   med samme forklaring du ser her — teksterne kommer fra ét fælles sted, så de aldrig er i utakt.</p>
+
+  <div class="note">
+    <strong>Sådan virker sliderne.</strong> Bag hver slider ligger et <strong>histogram</strong> der viser
+    hvor aktierne fordeler sig — så du kan se hvor det giver mening at skubbe håndtagene hen.
+    Sliderens interval dækker det <strong>brugbare område</strong>: ekstreme eller fysisk umulige yderpunkter
+    (fx en P/E på flere millioner, eller en margin på 20.000% fra korrupte data) klippes væk, så slideren ikke
+    bliver ubrugelig. <strong>Sliderens ender er “åbne”:</strong> når et håndtag står yderst, sætter det
+    <em>intet</em> loft eller gulv på den side — så alle aktier derover/derunder er <strong>stadig med</strong>.
+    Det vises som fx <code>100+</code> (alt over 100 inkluderet) eller <code>≤-100%</code> (alt derunder med).
+    En aktie som Palantir med høj P/E forsvinder altså først hvis du <em>aktivt</em> trækker P/E-loftet ned
+    under dens værdi. Aktier med <strong>mistænkte datafejl</strong> (urealistiske kursspring) skjules som
+    standard, men kan slås til med knappen øverst i filter-panelet.
+  </div>
+
   <?php foreach (flt_groups() as $g): ?>
     <h3><?= htmlspecialchars($g['title']) ?></h3>
     <table class="filter-help">
