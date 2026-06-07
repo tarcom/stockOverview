@@ -285,9 +285,10 @@ function renderResults(rows, sort) {
   // Ekstra kolonner for de range-filtre der er "i spil" (undtagen dem der allerede vises fast).
   const FIXED_SHOWN = new Set(['mkt_cap_usd', sort, 'ret_1y', 'quality_3y', 'trailing_pe', 'dividend_yield']);
   const activeCols = $$('.filt:not(.multi).active')
-    .map(el => ({ key: el.dataset.key, label: el.dataset.label }))
+    .map(el => ({ key: el.dataset.key, label: el.dataset.label, info: el.querySelector('.info')?.title || '' }))
     .filter(c => !FIXED_SHOWN.has(c.key) && DOMAINS[c.key]);
-  const fHead = activeCols.map(c => `<th class="num filt-col">${escHtml(c.label)} ${I('Værdien for dette filter, som du har i spil.')}</th>`).join('');
+  // Brug filterets EGEN hjælpetekst (samme "i"-tekst som i filter-panelet).
+  const fHead = activeCols.map(c => `<th class="num filt-col">${escHtml(c.label)} ${I(c.info || c.label)}</th>`).join('');
   const fRow = r => activeCols.map(c => `<td class="num filt-col">${fmtVal(r[c.key] == null ? null : +r[c.key], DOMAINS[c.key].fmt)}</td>`).join('');
   let h = `<table class="rtable"><thead><tr>
     <th>#</th><th>Symbol</th><th>Navn</th><th>Sektor</th><th>Land</th>
