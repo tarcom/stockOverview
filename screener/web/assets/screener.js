@@ -234,6 +234,8 @@ function collectParams() {
     p.set('hj', '0');
   }
   if ($('#allListings').checked) p.set('alllistings', '1');   // vis sekundære krydsnoteringer
+  const activePresets = $$('.preset.on').map(b => b.dataset.preset);   // fx Nordnet-scope → gemmes med screen
+  if (activePresets.length) p.set('presets', activePresets.join(','));
   p.set('sort', $('#sort').value);
   p.set('dir', $('#dirBtn').dataset.dir === 'asc' ? 'asc' : 'desc');
   p.set('limit', $('#limit').value);
@@ -675,6 +677,9 @@ function applyStateFromURL() {
   const p = new URLSearchParams(location.search);
   if (p.get('hj') === '0') $('#hideJunk').checked = false;
   if (p.get('alllistings') === '1') $('#allListings').checked = true;
+  if (p.get('presets')) p.get('presets').split(',').forEach(name => {   // gendan aktive preset-knapper (fx Nordnet)
+    const b = document.querySelector('.preset[data-preset="' + name + '"]'); if (b) b.classList.add('on');
+  });
   if (p.get('sort')) $('#sort').value = p.get('sort');
   if (p.get('limit')) $('#limit').value = p.get('limit');
   if (p.get('dir') === 'asc') { $('#dirBtn').dataset.dir = 'asc'; $('#dirBtn').textContent = '▲ Lavest'; }

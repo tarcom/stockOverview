@@ -190,7 +190,7 @@ function flt_results(array $p, string $sort, string $dir, int $limit): array {
  */
 function flt_hard_bounds(): array {
     return [
-        'mkt_cap_usd'=>[1e6,3e12], 'last_close'=>[0.01,1e5], 'history_years'=>[0,10.5], 'max_day_move'=>[0,2],
+        'mkt_cap_usd'=>[1e6,3e12], 'last_close'=>[0.01,1e5], 'history_years'=>[0,35], 'max_day_move'=>[0,2],
         'ret_1m'=>[-0.6,0.6],'ret_3m'=>[-0.8,1],'ret_6m'=>[-0.9,1.5],'ret_1y'=>[-1,3],
         'ret_2y'=>[-1,5],'ret_3y'=>[-1,8],'ret_5y'=>[-1,15],'ret_10y'=>[-1,30],
         'cagr_1y'=>[-1,3],'cagr_3y'=>[-1,2],'cagr_5y'=>[-1,1],
@@ -276,7 +276,7 @@ function flt_compute_facets(): array {
 // ---------- Grafdata (base-100 tidsserier til udfaldsrum-graferne) ----------
 
 function win_days(string $w): int {
-    return ['1m'=>30,'3m'=>91,'6m'=>182,'1y'=>365,'2y'=>730,'3y'=>1095,'5y'=>1826,'10y'=>3652][$w] ?? 1095;
+    return ['1m'=>30,'3m'=>91,'6m'=>182,'1y'=>365,'2y'=>730,'3y'=>1095,'5y'=>1826,'10y'=>3652,'max'=>36500][$w] ?? 1095;
 }
 
 /** Reducerer en serie til højst $max punkter (jævn sampling, beholder først+sidst). */

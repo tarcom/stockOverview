@@ -135,12 +135,12 @@ $presets = [
       <div class="chart-controls">
         <strong>Kursudvikling (base-100)</strong>
         <span class="period-btns" id="periodBtns">
-          <?php foreach (['1m'=>'1M','3m'=>'3M','6m'=>'6M','1y'=>'1Å','2y'=>'2Å','3y'=>'3Å','5y'=>'5Å','10y'=>'Maks'] as $w=>$lbl): ?>
+          <?php foreach (['1m'=>'1M','3m'=>'3M','6m'=>'6M','1y'=>'1Å','2y'=>'2Å','3y'=>'3Å','5y'=>'5Å','10y'=>'10Å','max'=>'Maks'] as $w=>$lbl): ?>
             <button type="button" class="pbtn<?= $w==='3y'?' on':'' ?>" data-win="<?= $w ?>"><?= $lbl ?></button>
           <?php endforeach; ?>
         </span>
         <select id="chartWindow" hidden>
-          <?php foreach (['1m','3m','6m','1y','2y','3y','5y','10y'] as $w): ?>
+          <?php foreach (['1m','3m','6m','1y','2y','3y','5y','10y','max'] as $w): ?>
             <option value="<?= $w ?>"<?= $w==='3y'?' selected':'' ?>><?= strtoupper($w) ?></option>
           <?php endforeach; ?>
         </select>
