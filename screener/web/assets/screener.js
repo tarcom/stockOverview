@@ -1071,15 +1071,27 @@ function renderTA() {
     ds.push({ label: TA_DATA.bench.label, data: bp.map(p => ({ x: Date.parse(p[0]), y: p[1] / bb0 * 100 })),
       borderColor: '#e6edf3', borderWidth: 2, borderDash: [6, 4], pointRadius: 0, tension: .1 });
   }
+  const priceOpts = baseOpts('Base 100', xmin, xmax);
+  // Volumen vises Yahoo-stil i bunden af KURS-grafen (sekundær akse, nederste ~22%).
+  // Tegnes som udfyldt trin-flade i st.f. søjler — søjler på en lineær tidsakse klumper.
+  if ($('.ta-sub[value="vol"]').checked) {
+    // Skalér til 95-percentilen (ikke max), så typisk volumen er synlig og enkelte
+    // earnings-spikes klipper i toppen — ellers drukner normale dage i slivers.
+    const vmax = pctile(vol.filter(v => v != null && v > 0), 0.95) || 1;
+    ds.push({ label: 'Volumen', data: xy(vol), yAxisID: 'yVol', fill: 'origin', stepped: 'middle',
+      borderWidth: 0, pointRadius: 0, backgroundColor: 'rgba(120,140,170,.30)' });
+    priceOpts.scales.yVol = { display: false, position: 'left', min: 0, max: vmax * 3.5, grid: { display: false } };
+  }
   if (taPriceChart) taPriceChart.destroy();
-  taPriceChart = new Chart($('#taPrice'), { type: 'line', data: { datasets: ds }, options: baseOpts('Base 100', xmin, xmax), plugins: [spanLabel] });
+  taPriceChart = new Chart($('#taPrice'), { type: 'line', data: { datasets: ds }, options: priceOpts, plugins: [spanLabel] });
   taPriceChart.$taType = 'price';
   TA_XMIN = xmin; TA_XMAX = xmax;
 
-  // Nederste paneler: 0-3 valgte indikatorer (RSI/MACD/Volumen), hver i sin egen rude.
+  // Nederste paneler: kun RSI/MACD (volumen er flyttet ind under kursen).
   taSubCharts.forEach(c => c.destroy()); taSubCharts = [];
   const container = $('#taSubPanes'); container.innerHTML = '';
   $$('.ta-sub:checked').forEach(c => {
+    if (c.value === 'vol') return;
     const cfg = taSubPanel(c.value, { close, b100, vol, ts, xy, xmin, xmax });
     if (!cfg) return;
     const pane = document.createElement('div'); pane.className = 'ta-pane';
@@ -1102,15 +1114,26 @@ function setTAView(min, max) {
     taFitY(ch, min, max);
   });
 }
+function pctile(arr, p) {
+  if (!arr || !arr.length) return 0;
+  const s = [...arr].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.floor(p * s.length))];
+}
 function taFitY(ch, min, max) {
   if (ch.$taType === 'rsi') { ch.update('none'); return; }        // RSI: behold fast 0-100
-  let lo = Infinity, hi = -Infinity;
-  ch.data.datasets.forEach((d, i) => { if (ch.getDatasetMeta(i).hidden) return;
-    d.data.forEach(pt => { const y = pt.y; if (y != null && pt.x >= min && pt.x <= max) { if (y < lo) lo = y; if (y > hi) hi = y; } }); });
-  if (!isFinite(lo) || !isFinite(hi)) { ch.update('none'); return; }
-  const pad = (hi - lo) * 0.05 || Math.abs(hi) * 0.05 || 1;
-  ch.options.scales.y.min = ch.$taType === 'vol' ? 0 : lo - pad;
-  ch.options.scales.y.max = hi + pad;
+  let lo = Infinity, hi = -Infinity; const vvis = [];
+  ch.data.datasets.forEach((d, i) => {
+    if (ch.getDatasetMeta(i).hidden) return;
+    const isVol = d.yAxisID === 'yVol';                            // volumen er på egen akse → udelukkes fra pris-y
+    d.data.forEach(pt => { const y = pt.y; if (y == null || pt.x < min || pt.x > max) return;
+      if (isVol) { if (y > 0) vvis.push(y); } else { if (y < lo) lo = y; if (y > hi) hi = y; } });
+  });
+  if (isFinite(lo) && isFinite(hi)) {
+    const pad = (hi - lo) * 0.05 || Math.abs(hi) * 0.05 || 1;
+    ch.options.scales.y.min = ch.$taType === 'vol' ? 0 : lo - pad;
+    ch.options.scales.y.max = hi + pad;
+  }
+  if (ch.options.scales.yVol && vvis.length) ch.options.scales.yVol.max = (pctile(vvis, 0.95) || 1) * 3.5; // 95-pct → synligt vindue
   ch.update('none');
 }
 
