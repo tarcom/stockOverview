@@ -337,7 +337,7 @@ function axisDateFmt(v, i, ticks) {
 }
 
 async function loadChart() {
-  const syms = (window.CURRENT_SYMBOLS || []).slice(0, 16);
+  const syms = (window.CURRENT_SYMBOLS || []).slice(0, 60);   // op til 60 → sparklines til alle rækker
   if (!syms.length) { CHART_RAW = null; if (overlayChart) { overlayChart.destroy(); overlayChart = null; } clearSparklines(); loadDone(); return; }
   const win = $('#chartWindow').value, bench = $('#chartBench').value;
   try {
@@ -357,7 +357,7 @@ function drawOverlay() {
   // dato-match gav huller). benchFF(dato) = seneste benchmark-værdi på/før datoen.
   const benchFF = (CHART_RAW.bench && CHART_RAW.bench.points.length) ? makeFFill(CHART_RAW.bench.points) : null;
 
-  const datasets = (CHART_RAW.series || []).filter(s => !HIDDEN.has(s.symbol)).map((s, i) => {
+  const datasets = (CHART_RAW.series || []).filter(s => !HIDDEN.has(s.symbol)).slice(0, 16).map((s, i) => {
     let pts = s.points.map(p => [Date.parse(p[0]), p[1]]);
     if (relative && benchFF) pts = s.points.map(p => { const b = benchFF(p[0]); return [Date.parse(p[0]), b ? p[1] / b * 100 : null]; });
     return { label: s.symbol, symbol: s.symbol, data: pts.map(([t, y]) => ({ x: t, y })),
@@ -807,11 +807,9 @@ function clearOneFilter(key, type) {
 // resten af koden er synkron; ændringer persisteres til serveren (fire-and-forget).
 let USERDATA = { screens: [], favorites: [], hidden: [] };
 let HIDDEN = new Set();   // symboler skjult fra overlay-grafen (gemt i DB)
-function ownerToken() {
-  let t = localStorage.getItem('scr_owner');
-  if (!t) { t = (crypto.randomUUID ? crypto.randomUUID() : 'o' + Date.now() + Math.random().toString(36).slice(2)); localStorage.setItem('scr_owner', t); }
-  return t;
-}
+// Foreløbig: ÉT globalt, delt sæt screens/favoritter — tilgængeligt fra alle computere
+// (ingen login). Skiftes til per-bruger-token igen den dag der kommer rigtige brugere.
+function ownerToken() { return 'global'; }
 function persistUser(key) {
   fetch('api.php?action=userset&owner=' + encodeURIComponent(ownerToken()) + '&key=' + key,
     { method: 'POST', body: JSON.stringify(USERDATA[key]) }).catch(() => {});

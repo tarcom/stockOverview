@@ -126,16 +126,6 @@ $presets = [
     </div>
     <div class="results-head">
       <div class="count-box"><span id="count">…</span> <span class="muted">/ <span id="total">…</span> aktier matcher</span></div>
-      <div class="controls">
-        <label>Sortér <select id="sort">
-          <?php foreach ($sortOpts as $k => $lbl): ?><option value="<?= $k ?>"><?= $lbl ?></option><?php endforeach; ?>
-        </select></label>
-        <button id="dirBtn" class="btn-ghost" title="Skift retning">▼ Højest</button>
-        <label>Vis <select id="limit"><option>10</option><option selected>20</option><option>50</option><option>100</option></select></label>
-        <button id="shareBtn" class="btn-ghost" title="Kopiér delbart link">🔗 Del</button>
-        <button id="csvBtn" class="btn-ghost" title="Download resultater som CSV">⬇ CSV</button>
-        <button id="saveBtn" class="btn-ghost" title="Gem disse filtre som en navngiven screen">💾 Gem</button>
-      </div>
     </div>
     <div id="savedScreens" class="saved"></div>
     <div id="chips" class="chips"></div>
@@ -169,6 +159,16 @@ $presets = [
       <div class="chart-mini-wrap" id="miniWrap"><canvas id="overlayMini"></canvas></div>
     </div>
 
+    <div class="controls table-controls">
+      <label>Sortér <select id="sort">
+        <?php foreach ($sortOpts as $k => $lbl): ?><option value="<?= $k ?>"><?= $lbl ?></option><?php endforeach; ?>
+      </select></label>
+      <button id="dirBtn" class="btn-ghost" title="Skift retning">▼ Højest</button>
+      <label>Vis <select id="limit"><option>10</option><option selected>20</option><option>50</option><option>100</option></select></label>
+      <button id="shareBtn" class="btn-ghost" title="Kopiér delbart link">🔗 Del</button>
+      <button id="csvBtn" class="btn-ghost" title="Download resultater som CSV">⬇ CSV</button>
+      <button id="saveBtn" class="btn-ghost" title="Gem disse filtre som en navngiven screen">💾 Gem</button>
+    </div>
     <div id="resultWrap" class="result-wrap"><div class="loading">Indlæser…</div></div>
     <p class="results-note">Bemærk: et aktivt filter udelukker automatisk aktier der mangler den datatype. Klik en række for teknisk analyse.</p>
   </section>

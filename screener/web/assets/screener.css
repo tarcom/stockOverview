@@ -278,3 +278,6 @@
 /* Kolonner for de filtre der er "i spil" — subtil grøn-tonet markering */
 .rtable th.filt-col, .rtable td.filt-col { background: rgba(46,196,182,.07); }
 .rtable th.filt-col { color: #2ec4b6; }
+
+/* Sorterings-/tabel-kontroller flyttet ned lige over tabellen */
+.table-controls { margin: 1.2rem 0 .4rem; padding-top: .8rem; border-top: 1px solid var(--border); }
