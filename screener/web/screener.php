@@ -26,9 +26,9 @@ $presets = [
   'dividend' => ['label'=>'🏦 Udbytte', 'sort'=>'dividend_yield', 'dir'=>'desc',
     'title'=>'Solide udbyttebetalere: yield over 3%, mid/large-cap.',
     'filters'=>['dividend_yield'=>['min'=>0.03],'mkt_cap_usd'=>['min'=>1e9]]],
-  'nordnet' => ['label'=>'🇩🇰 Nordnet-handelbar', 'sort'=>'quality_1y', 'dir'=>'desc',
-    'title'=>'Kun markeder du typisk kan handle via Nordnet: Norden, USA/Canada og Vesteuropa — ingen direkte asiatiske børser.',
-    'filters'=>['mkt_cap_usd'=>['min'=>1e8], 'country'=>['in'=>['Denmark','Sweden','Norway','Finland','Iceland',
+  'nordnet' => ['label'=>'🇩🇰 Nordnet-handelbar', 'additive'=>true,
+    'title'=>'Geografisk afgrænsning der lægges OVENI dine øvrige filtre (uden at rydde dem): kun markeder du typisk kan handle via Nordnet — Norden, USA/Canada og Vesteuropa, ingen direkte asiatiske børser.',
+    'filters'=>['country'=>['in'=>['Denmark','Sweden','Norway','Finland','Iceland',
       'United States','Canada','Germany','France','Netherlands','Belgium','Italy','Spain','Portugal','Austria',
       'Switzerland','United Kingdom','Ireland','Estonia','Latvia','Lithuania','Poland']]]],
 ];
@@ -134,11 +134,16 @@ $presets = [
     <div class="chartbox" id="chartbox">
       <div class="chart-controls">
         <strong>Kursudvikling (base-100)</strong>
-        <label>Periode <select id="chartWindow">
+        <span class="period-btns" id="periodBtns">
+          <?php foreach (['1m'=>'1M','3m'=>'3M','6m'=>'6M','1y'=>'1Å','2y'=>'2Å','3y'=>'3Å','5y'=>'5Å','10y'=>'Maks'] as $w=>$lbl): ?>
+            <button type="button" class="pbtn<?= $w==='3y'?' on':'' ?>" data-win="<?= $w ?>"><?= $lbl ?></button>
+          <?php endforeach; ?>
+        </span>
+        <select id="chartWindow" hidden>
           <?php foreach (['1m','3m','6m','1y','2y','3y','5y','10y'] as $w): ?>
             <option value="<?= $w ?>"<?= $w==='3y'?' selected':'' ?>><?= strtoupper($w) ?></option>
           <?php endforeach; ?>
-        </select></label>
+        </select>
         <label>Benchmark <select id="chartBench">
           <?php foreach (cfg()['benchmarks'] as $k => $lbl): ?>
             <option value="<?= htmlspecialchars($k) ?>"<?= $k===cfg()['rs_benchmark']?' selected':'' ?>><?= htmlspecialchars($lbl) ?></option>

@@ -268,3 +268,9 @@
 /* Sekundær-børsnotering-badge (vises kun når "Vis alle børsnoteringer" er slået til) */
 .rtable .sec-badge { font-size: .68rem; color: var(--muted); background: var(--panel2);
   border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; margin-left: .25rem; font-weight: 400; }
+
+/* Hurtig-periode-knapper (TradingView-stil) */
+.period-btns { display: inline-flex; gap: 2px; background: var(--panel2); border: 1px solid var(--border); border-radius: 7px; padding: 2px; }
+.period-btns .pbtn { background: none; border: none; color: var(--muted); font-size: .8rem; padding: .2rem .5rem; border-radius: 5px; cursor: pointer; }
+.period-btns .pbtn:hover { color: var(--text); }
+.period-btns .pbtn.on { background: var(--accent); color: #fff; font-weight: 600; }

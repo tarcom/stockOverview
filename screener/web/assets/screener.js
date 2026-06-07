@@ -120,6 +120,12 @@ function wireControls() {
   $('#hideJunk').addEventListener('change', refresh);
   $('#allListings').addEventListener('change', refresh);
   $('#chartWindow').addEventListener('change', loadChart);  // ny periode → refetch
+  $$('#periodBtns .pbtn').forEach(b => b.addEventListener('click', () => {   // hurtig-periode-knapper
+    $$('#periodBtns .pbtn').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    $('#chartWindow').value = b.dataset.win;
+    loadChart();
+  }));
   $('#chartBench').addEventListener('change', loadChart);
   $('#chartLogY').addEventListener('change', drawOverlay);  // transformationer → kun gentegn
   $('#chartRelative').addEventListener('change', drawOverlay);
@@ -704,6 +710,23 @@ function resetAll() { clearFilters(); $$('.preset').forEach(b => b.classList.rem
 function applyPreset(name) {
   const ps = (window.PRESETS || {})[name];
   if (!ps) return;
+  // Additive presets (fx Nordnet) er en geografisk afgrænsning der lægges oveni de
+  // eksisterende filtre — de rydder IKKE dine valg og rører ikke sortering.
+  if (ps.additive) {
+    const btn = document.querySelector('.preset[data-preset="' + name + '"]');
+    const turningOff = btn && btn.classList.contains('on');   // gentryk = slå scope fra
+    for (const [key, rng] of Object.entries(ps.filters || {})) {
+      const el = document.querySelector('.filt[data-key="' + key + '"]'); if (!el || !rng.in) continue;
+      el.closest('.fgroup').classList.add('open');
+      const want = new Set(rng.in);
+      $$('input', el).forEach(i => i.checked = turningOff ? false : want.has(i.value));
+      el.classList.toggle('active', $$('input:checked', el).length > 0);
+      markGroupActive(el);
+    }
+    if (btn) btn.classList.toggle('on', !turningOff);
+    refresh();
+    return;
+  }
   clearFilters();
   $$('.preset').forEach(b => b.classList.toggle('on', b.dataset.preset === name));
   for (const [key, rng] of Object.entries(ps.filters || {})) {
