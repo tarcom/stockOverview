@@ -42,6 +42,7 @@ $presets = [
 <link rel="stylesheet" href="assets/style.css?v=<?= filemtime(__DIR__ . '/assets/style.css') ?>">
 <link rel="stylesheet" href="assets/screener.css?v=<?= filemtime(__DIR__ . '/assets/screener.css') ?>">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 </head>
 <body>
 <?php render_header('screener'); ?>
@@ -133,9 +134,11 @@ $presets = [
           <?php endforeach; ?>
           <option value="">(ingen)</option>
         </select></label>
-        <span class="muted">alle indekseret til 100 ved start · klik i forklaringen for at skjule linjer</span>
+        <label title="Logaritmisk y-akse — gør at en enkelt aktie med ekstrem stigning ikke klemmer de andre flade"><input type="checkbox" id="chartLogY"> Log y-akse</label>
+        <button id="chartReset" class="btn-ghost" title="Nulstil zoom/panorering">⟲ Nulstil zoom</button>
       </div>
       <div class="chart-canvas-wrap"><canvas id="overlayChart"></canvas></div>
+      <div class="chart-help muted">Alle indekseret til 100 ved start · <strong>scroll</strong> for at zoome, <strong>træk</strong> for at panorere · klik i forklaringen for at skjule/vise linjer · hold musen over for navn</div>
     </div>
 
     <div id="resultWrap" class="result-wrap"><div class="loading">Indlæser…</div></div>

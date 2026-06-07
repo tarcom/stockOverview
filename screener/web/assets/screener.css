@@ -212,3 +212,8 @@
 .pct-row .pbar span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #2ec4b6); }
 .pct-row .pv { width: 130px; text-align: right; color: var(--muted); }
 @media (max-width: 700px) { .ta-details { grid-template-columns: 1fr; } }
+
+/* Hover-highlight fra graf til tabel */
+.rtable tr.hl-row td { background: rgba(91,141,239,.20) !important; }
+/* Hjælpe-tekst under grafen (flyttet ud af controls-baren) */
+.chart-help { font-size: .78rem; margin-top: .55rem; }

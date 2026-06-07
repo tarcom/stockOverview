@@ -96,6 +96,8 @@ function wireControls() {
   $('#hideJunk').addEventListener('change', refresh);
   $('#chartWindow').addEventListener('change', loadChart);
   $('#chartBench').addEventListener('change', loadChart);
+  $('#chartLogY').addEventListener('change', loadChart);
+  $('#chartReset').addEventListener('click', () => { if (overlayChart) overlayChart.resetZoom(); });
   $('#resetBtn').addEventListener('click', resetAll);
   $$('.preset').forEach(b => b.addEventListener('click', () => applyPreset(b.dataset.preset)));
   $('#csvBtn').addEventListener('click', () => { window.location = 'api.php?action=csv&' + collectParams().toString(); });
@@ -253,6 +255,7 @@ function renderResults(rows, sort) {
   });
   $('#resultWrap').innerHTML = h + '</tbody></table>';
   window.CURRENT_SYMBOLS = rows.map(r => r.symbol);
+  window.SYMBOL_NAMES = {}; rows.forEach(r => window.SYMBOL_NAMES[r.symbol] = r.name || r.symbol);
   loadChart();
 }
 
@@ -273,7 +276,7 @@ async function loadChart() {
   } catch (e) { return; }
 
   const datasets = (d.series || []).map((s, i) => ({
-    label: s.symbol,
+    label: s.symbol, symbol: s.symbol,
     data: s.points.map(p => ({ x: Date.parse(p[0]), y: p[1] })),
     borderColor: CHART_PALETTE[i % CHART_PALETTE.length],
     backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
@@ -293,19 +296,32 @@ async function loadChart() {
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       interaction: { mode: 'nearest', intersect: false },
+      onHover: (e, els, chart) => {
+        $$('.rtable tr.hl-row').forEach(r => r.classList.remove('hl-row'));
+        if (els.length) {
+          const sym = chart.data.datasets[els[0].datasetIndex].symbol;
+          if (sym) { const tr = document.querySelector('.rtable tr[data-sym="' + sym + '"]'); if (tr) tr.classList.add('hl-row'); }
+        }
+      },
       scales: {
         x: { type: 'linear', ticks: { color: '#9aa4b2', maxTicksLimit: 8,
               callback: v => new Date(v).toLocaleDateString('da-DK', { year: '2-digit', month: 'short' }) },
              grid: { color: '#1c2330' } },
-        y: { ticks: { color: '#9aa4b2' }, grid: { color: '#1c2330' },
+        y: { type: $('#chartLogY').checked ? 'logarithmic' : 'linear',
+             ticks: { color: '#9aa4b2' }, grid: { color: '#1c2330' },
              title: { display: true, text: 'Base 100', color: '#9aa4b2' } },
       },
       plugins: {
         legend: { position: 'bottom', labels: { color: '#cbd3df', boxWidth: 12, font: { size: 11 } } },
         tooltip: { callbacks: {
           title: items => items.length ? new Date(items[0].parsed.x).toLocaleDateString('da-DK') : '',
-          label: c => `${c.dataset.label}: ${c.parsed.y.toFixed(1)}`,
+          label: c => { const s = c.dataset.symbol; const nm = s ? (window.SYMBOL_NAMES[s] || s) : c.dataset.label;
+            return `${nm}: ${c.parsed.y.toFixed(1)}`; },
         } },
+        zoom: {
+          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' },
+          pan: { enabled: true, mode: 'xy' },
+        },
       },
     },
   });
