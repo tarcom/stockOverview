@@ -2,37 +2,53 @@
 
 ## Hvad er dette?
 
-En Java-baseret aktie-screener. To dele:
+Et aktie-screener-system i **tre dele**:
 
-1. **Ingestion (primær, `dk.stockAnalyzer.Ingest`)** — henter ALT tilgængeligt data for hver
-   ticker fra Yahoo Finance og lægger det i MariaDB: 10 års daglig OHLCV-historik,
-   udbytter/splits, virksomheds-metadata (sektor/industri/land m.m.) og ~45 fundamentale
-   nøgletal (P/E, P/B, EV/EBITDA, ROE, margins, gæld, vækst, …). Dette er fundamentet
-   man screener oven på.
-2. **Momentum-screener (sekundær, `dk.stockAnalyzer.Main`)** — den oprindelige 2015-kode:
+1. **Ingestion (Java, `dk.stockAnalyzer.Ingest`)** — henter ALT tilgængeligt data for hver
+   ticker fra Yahoo Finance og lægger det i MariaDB: **hele den daglige OHLCV-historik**
+   (op til ~60+ år), udbytter/splits, virksomheds-metadata (sektor/industri/land m.m.) og
+   ~45 fundamentale nøgletal. Fundamentet man screener oven på.
+2. **Screener-web-portal (PHP+MySQL, `screener/`)** — det centrale produkt: en webportal
+   ("Nørgaard's Aktie Screener") med filtre, base-100-grafer, teknisk analyse (SMA/RSI/MACD/
+   volumen), presets, gemte screens og favoritter. Den fuldscanner en bred, **forudberegnet**
+   tabel (`stockOverview_screener`) på millisekunder. Bygges af `screener/bin/precompute.php`.
+   **Se `screener/CLAUDE.md`-noterne i auto-memory for detaljer.** Kører på HTPC, portabel til
+   aogj.com (one.com) senere. Datakilden holdes hemmelig — **nævn aldrig Yahoo i UI-tekst.**
+3. **Momentum-screener (gammel, `dk.stockAnalyzer.Main`)** — den oprindelige 2015-kode:
    "Allan's Strategy" (momentum-scoring) + Excel/links-export. Uændret; kører nu på DB-data.
 
+**Daglig drift:** cron kører `daily_update.sh` kl. 04:00 (inkrementel ingest + precompute).
 Projektet er skrevet i 2015–2017, moderniseret 2026 (Maven, live Yahoo-data, crumb/cookie,
-MariaDB-persistens). Validér end-to-end ved at køre `Ingest` med en lille limit.
+MariaDB, PHP-screener). Validér end-to-end ved at køre `Ingest` med en lille limit.
 
 ---
 
 ## Ingestion — `dk.stockAnalyzer.Ingest` (primær path)
 
 ```
-allYahooStocks.txt (150k symboler)
+allYahooStocks.txt (~150k symboler)
       ↓  (pr. symbol, 8 tråde)
-YahooClient.getDailyHistory   v8/chart  →  10 års OHLCV + adjclose + udbytter/splits
+YahooClient.getDailyHistory   v8/chart  →  HELE OHLCV-historikken + adjclose + udbytter/splits
 YahooClient.getQuoteSummary   v10/quoteSummary  →  profil + ~45 nøgletal
       ↓
 StockDb (UPSERT)  →  stockOverview_{prices,dividends,splits,securities,fundamentals,ingest_log}
 ```
 
 **Inkrementel som standard:** for hvert symbol slås `MAX(price_date)` op. Tom → **fuld
-10-års backfill** (`range=10y`). Ellers hentes kun nye dage (`period1 = sidste dato − 4
-dages overlap`). Den første nat-kørsel backfiller alt; efterfølgende daglige kørsler
-henter blot de seneste dage + ét nyt fundamentals-snapshot. `INSERT … ON DUPLICATE KEY
-UPDATE` overalt, så det er idempotent.
+backfill af hele historikken** (`period1=0&period2=now&interval=1d`). Ellers hentes kun nye
+dage (`period1 = sidste dato − 4 dages overlap`). `INSERT … ON DUPLICATE KEY UPDATE` overalt
+(idempotent). **Weekend-bjælker droppes i parseren** (børser handler ikke lør/søn).
+
+**Dyb historik-backfill (`INGEST_BACKFILL_ALL=1`):** tvinger fuld gen-hentning (period1=0) af
+ALLE symboler, også dem der allerede har data — bruges én gang til at hente historik dybere
+end de tidligere 10 år. Genoptag-bart: færdige symboler logges `status='backfilled'` og
+springes over ved genstart. Pausér den daglige cron under en sådan kampagne.
+
+**Gotcha (vigtig):** den oprindelige `range=max` returnerede MÅNEDLIGE bjælker (timestampet d.
+1. i hver mdr, med måneds-volumen, endda på weekender) blandet ind i de daglige → fantom-
+spikes i volumen + kurs. Derfor bruges nu `period1=0&interval=1d` + weekend-skip. Skulle de
+opstå igen efter en backfill: `DELETE FROM stockOverview_prices WHERE DAYOFMONTH(price_date)=1`
+(slet pr. symbol for at undgå én kæmpe-transaktion) + kør precompute igen.
 
 **Alle tickers ingestes** uanset historik-længde — 70%-grænsen hører til *screening*, ikke
 ingestion. Symboler der giver HTTP 404 logges som `status='not_found'` i `ingest_log` og
@@ -55,7 +71,44 @@ Nat-backfill: `Ingest` er default-`mainClass`, så HTPC kan køre `mvn exec:java
 
 ---
 
-## Momentum-screener (sekundær) — kør-flow
+## Screener-web-portal (`screener/`) — det centrale produkt
+
+PHP+MySQL-webportal der lader brugeren filtrere ~76k aktier på sliders (med histogrammer),
+sammenligne på base-100-grafer, og åbne teknisk analyse (SMA/RSI/MACD/volumen) pr. aktie.
+
+- **`screener/bin/precompute.php`** — bygger den brede, forudberegnede tabel
+  `stockOverview_screener` (én række pr. aktie, ~150 kolonner: afkast, CAGR, **quality**
+  (annualiseret eksp. hældning × R², Clenow-stil), trend-stabilitet R², volatilitet, maxdd,
+  sharpe, beta, **markeds-korrelation² (mkt_r2)**, relativ styrke vs S&P500 — pr. vindue
+  1M…10Y). Metrics-vinduer er ≤10 år; web-portalen fuldscanner tabellen på ms.
+  Korrupte/umulige værdier clampes til null (fx |quality|>10, |sharpe|>10, |beta|>5).
+  Til sidst: **dedup** (markér krydsnoteringer → `is_primary`) + **facet-cache** (histogrammer).
+- **`screener/bin/dedup.php`** — samme selskab på flere børser (WDC, WDC.F, WDC.MX…) →
+  vælg ét primært listing pr. (navn, land) via børs-hierarki (US > Norden/V.Europa > … > OTC).
+  Web viser `is_primary=1` som standard; toggle "Vis alle børsnoteringer" viser alle.
+- **`screener/web/`** — PHP-API (`api.php`) + frontend (`screener.php` + `assets/screener.js`).
+  Gemte screens/favoritter/skjulte ligger i DB (`stockOverview_userdata`), pt. GLOBALT delt
+  (`ownerToken()` returnerer fast `'global'`, intet login). Facetter caches i `stockOverview_cache`.
+- PHP-config: `screener/config/config.php` (gitignored). Verifikation: headless-Chrome-
+  screenshot mod `http://localhost/screener/...` (Apache serverer det); interaktiv test via
+  CDP (`--remote-allow-origins=*`, Python venter — bash `sleep` er blokeret i sandkassen).
+
+## Daglig drift — `daily_update.sh` (cron kl. 04:00)
+
+```bash
+0 4 * * * /home/allan/stockOverview/daily_update.sh >> .../daily_cron.log 2>&1
+```
+1. **Inkrementel ingest** (`INGEST_FORCE=1 mvn compile exec:java`) — nye dagskurser for alle
+   gyldige symboler (~110 min, Yahoo-rate-limit). `INGEST_FORCE=1` ignorerer resume-skip så
+   ALLE opdateres.
+2. **`precompute.php`** (~50 min) — genberegner screener-tabel + dedup + facet-cache.
+
+Logger til `logs/daily_update.log`. Tunge fuld-backfills er IKKE en del af cron — kør manuelt
+med `INGEST_BACKFILL_ALL=1`. (Ligger i crontab ved siden af CarCrawler 20:00 + stocks 22:30.)
+
+---
+
+## Momentum-screener (gammel) — kør-flow
 
 ```
 allYahooStocks.txt
@@ -129,8 +182,14 @@ opretter dem selv (`CREATE TABLE IF NOT EXISTS`); alt bruger `ON DUPLICATE KEY U
 | `stockOverview_dividends` | symbol, ex_date, amount |
 | `stockOverview_splits` | symbol, split_date, numerator, denominator |
 | `stockOverview_fundamentals` | symbol, snapshot_date, **~45 nøgletal-kolonner** (trailing/forward PE, P/B, EV/EBITDA, ROE, ROA, margins, debt_to_equity, current/quick ratio, growth, dividend_yield, beta, 52w, analyst-targets …) + `raw_json` (hele quoteSummary). PK(symbol, snapshot_date) → tidsserie |
-| `stockOverview_ingest_log` | symbol (PK), last_price_date, last_fundamentals_date, price_points, status, error — resumerbarhed + skip af `not_found` |
+| `stockOverview_ingest_log` | symbol (PK), last_price_date, last_fundamentals_date, price_points, status (`ok`/`not_found`/`backfilled`), error — resumerbarhed |
 | `stockOverview_symbols` | **gammel** momentum-tabel (symbol, name, market_cap); bevares til `Main`/`StockDb.persist` |
+| `stockOverview_screener` | **forudberegnet** bred tabel (én række/aktie, ~150 kolonner) bygget af `precompute.php`. + `is_primary`/`primary_symbol`/`listing_count` (dedup). Web-portalen fuldscanner denne |
+| `stockOverview_indexes` | benchmark-indeks (^GSPC, ^DJI, ^IXIC) til relativ styrke / mkt_r2 / graf-overlay |
+| `stockOverview_fx` | valutakurser → USD (markedsværdi sammenlignes på tværs af børser) |
+| `stockOverview_cache` | nøgle/værdi JSON-cache (fx forudberegnede facetter/histogrammer) — så web svarer på ms i st.f. ~8s |
+| `stockOverview_userdata` | per-ejer gemte screens / favorit-filtre / skjulte graf-aktier (pt. ejer=`'global'`) |
+| `stockOverview_runs` | log over precompute/ingest-kørsler |
 
 `fundamentals` er bred + rå JSON: de vigtigste felter som søgbare kolonner
 (`WHERE trailing_pe < 15 AND return_on_equity > 0.15`), plus hele quoteSummary-svaret i
@@ -154,8 +213,10 @@ Al datahentning går gennem `dk.stockAnalyzer.YahooClient` (ren Java, `HttpURLCo
 1. cookie: `GET https://fc.yahoo.com` (følg IKKE redirects — `Set-Cookie` er på det direkte svar)
 2. crumb: `GET https://query1.finance.yahoo.com/v1/test/getcrumb` med cookien
 3. data:
-   - **priser:** `v8/chart/<symbol>?range=10y&interval=1d&events=div,split` (OHLCV +
-     adjclose + udbytte/split-events) — `YahooClient.getDailyHistory`
+   - **priser:** `v8/chart/<symbol>?period1=<fra>&period2=<now>&interval=1d&events=div,split`
+     (OHLCV + adjclose + udbytte/split-events) — `YahooClient.getDailyHistory`. `fra=0` =
+     hele historikken (fuld backfill); ellers sidste dato − 4 dages overlap. **IKKE `range=max`**
+     (returnerede månedlige fantom-bjælker — se gotcha i ingest-sektionen). Weekend-bjælker droppes.
    - **fundamentals:** `v10/quoteSummary/<symbol>?modules=price,summaryProfile,summaryDetail,defaultKeyStatistics,financialData&crumb=` — `YahooClient.getQuoteSummary`. Tal er wrappet som `{raw, fmt}`; `StockDb` læser `.raw`.
    - **batch-snapshot (momentum):** navn+marketCap via `v7/quote?...&crumb=`
 
@@ -172,12 +233,12 @@ Al datahentning går gennem `dk.stockAnalyzer.YahooClient` (ren Java, `HttpURLCo
 5. **(Delvist) links** — navn/marketCap kommer nu fra `v7/quote`. `GoogleStockCopyPasteLinkGenerator` peger stadig på lukkede `google.com/finance`-links; erstat evt. med `https://finance.yahoo.com/quote/<symbol>` eller TradingView (`https://www.tradingview.com/chart/?symbol=CPH:<symbol-uden-.CO>`).
 
 **⏳ Udestår:**
-6. **Aktieliste — `doc/allYahooStocks.txt`** (25.242 symboler fra ~2015, mange udgåede). Opdateret liste kan hentes fra:
-   - **US (NASDAQ/NYSE):** `ftp://ftp.nasdaqtrader.com/SymbolDirectory/` — gratis, dagsopdateret
-   - **Globalt via Yahoo screener:** `https://query1.finance.yahoo.com/v1/finance/screener` (uofficiel, kræver crumb)
-   - **Nasdaq Copenhagen (.CO):** `https://www.nasdaqomxnordic.com/aktier` — manuelt download
-
-   NB: fuld kørsel = 25.242 symboler × `rateLimitMs` → mange timer. Test på en kort liste først, eller skru på `rateLimitMs`.
+6. **Aktieliste — `doc/allYahooStocks.txt`** er udvidet til ~150k symboler (global). Kan
+   evt. opdateres/udvides fra: **US:** `ftp://ftp.nasdaqtrader.com/SymbolDirectory/`;
+   **globalt:** Yahoos uofficielle screener-endpoint; **Norden:** `nasdaqomxnordic.com/aktier`.
+7. **aogj.com-migration** — flyt screener-web-portalen til one.com (PHP+MySQL). HTPC forbliver
+   compute-motor og pusher data via chunked JSON POST. Husk også `_screener`, `_cache`,
+   `_userdata`, `_indexes`, `_fx`-tabellerne.
 
 ---
 
@@ -201,13 +262,19 @@ stockOverview/
 │   ├── dk/skov/              ← GAMMELT, brug ikke (2009-era, bruger defunct CSV-endpoint)
 │   ├── dk/momentumStock/     ← Alternativ momentum-implementering, ikke brugt
 │   └── dk/techan/            ← HTML chart-generator, ikke brugt
+├── screener/                 ← NY: PHP+MySQL screener-web-portal (det centrale produkt)
+│   ├── bin/precompute.php    ← bygger stockOverview_screener + dedup + facet-cache
+│   ├── bin/dedup.php         ← markér krydsnoteringer (is_primary)
+│   ├── web/                  ← api.php + screener.php + assets/ (frontend)
+│   └── config/config.php     ← PHP DB-config (gitignored)
+├── daily_update.sh           ← NY: natlig cron (inkrementel ingest + precompute)
 ├── pom.xml                    ← Maven build (sourceDirectory=src)
 ├── lib/                       ← gamle jars; ikke længere på classpath (Maven styrer deps)
 ├── config/
 │   ├── db.properties.example ← skabelon for DB-credentials (committet)
-│   └── db.properties         ← rigtige credentials (gitignored)
+│   └── db.properties         ← rigtige credentials (gitignored, Java-ingest)
 ├── doc/
-│   ├── allYahooStocks.txt    ← 25.242 symboler (fra ~2015, forældet)
+│   ├── allYahooStocks.txt    ← ~150k symboler (heraf ~73k 'not_found', ~77k gyldige)
 │   └── todo.txt
 ├── output/                    ← runtime-output (CSV), gitignored
 ├── out/                       ← gammel IntelliJ-output, gitignored
@@ -218,6 +285,17 @@ stockOverview/
 
 ## Kendte fejl / gotchas
 
+- **Fantom-månedsbjælker (løst):** `range=max` lagde månedlige bjælker (d. 1. i hver mdr,
+  måneds-volumen, også weekender) oveni de daglige → fantom-spikes i volumen/kurs + spurious
+  måneds-afkast der oppustede volatilitet/metrics. Løst med `period1=0` + weekend-skip i
+  parseren. Eksisterende fantomer slettet (`DELETE … WHERE DAYOFMONTH(price_date)=1`, pr.
+  symbol) + precompute genkørt.
+- **Korrupte metrics clampes** i `precompute.php`: penny-/illikvide aktier gav absurde værdier
+  (quality i 100.000'er, sharpe i mia.) → |quality|>10, |sharpe|>10, |beta|>5, umulige
+  fundamentals nulstilles, så de ikke dominerer sorteringen.
+- **Store DELETEs:** PK er (symbol, price_date), så `WHERE DAYOFMONTH(...)`/dato-filtre = fuld
+  scan. Slet pr. symbol (autocommit, genoptag-bart) i st.f. én kæmpe-transaktion — en dræbt
+  baggrunds-DELETE ruller tilbage og holder låse.
 - `ExcelGenerator.java` brugte `SimpleDateFormat("YYYY-MM-dd")` (`YYYY` = ugebaseret ISO-år) — rettet til `yyyy-MM-dd`.
 - `AllansStrategy.java` bruger `TreeMap` som score-nøgle — hvis to aktier får samme score tilføjes en lille tilfældig decimal for at undgå kollision. Det er primitivt men fungerer.
 - Kurser persisteres nu i MariaDB (`StockDb`), ikke længere Java-serialisering til `.bin`. `StockWrapper.implements Serializable` er ikke længere nødvendigt for persistens (men skader ikke).
