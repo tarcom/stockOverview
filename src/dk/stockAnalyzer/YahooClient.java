@@ -378,14 +378,13 @@ public class YahooClient {
      * period1Sec != null  -> kun fra det tidspunkt og frem (inkrementel daglig kørsel).
      */
     public static DailyHistory getDailyHistory(String symbol, Long period1Sec) throws IOException {
-        String url;
-        if (period1Sec == null) {
-            url = CHART_URL + enc(symbol) + "?range=max&interval=1d&events=div,split";
-        } else {
-            long now = System.currentTimeMillis() / 1000L;
-            url = CHART_URL + enc(symbol) + "?period1=" + period1Sec + "&period2=" + now
-                    + "&interval=1d&events=div,split";
-        }
+        // Brug ALTID period1/period2+interval=1d (giver rene daglige bjælker). range=max
+        // returnerede også MÅNEDLIGE bjælker (timestampet d. 1. i hver mdr, månedsvolumen)
+        // blandet ind i de daglige → fantom-spikes. period1=0 = hele historikken fra epoch.
+        long now = System.currentTimeMillis() / 1000L;
+        long from = (period1Sec == null) ? 0L : period1Sec;
+        String url = CHART_URL + enc(symbol) + "?period1=" + from + "&period2=" + now
+                + "&interval=1d&events=div,split";
         JsonNode root = getJson(url);
         JsonNode result = root.path("chart").path("result");
         if (!result.isArray() || result.size() == 0) {
@@ -404,8 +403,13 @@ public class YahooClient {
             for (int i = 0; i < ts.size(); i++) {
                 JsonNode c = closeA.get(i);
                 if (c == null || c.isNull()) continue; // spring huller over (helligdage/manglende)
+                long tsec = ts.get(i).asLong();
+                // Spring weekend-bjælker over — børser handler ikke lør/søn, så en weekend-bjælke
+                // er altid et uge-/måneds-aggregat (fantom). Sikkerhedsnet uanset datakilde.
+                java.time.DayOfWeek dow = java.time.Instant.ofEpochSecond(tsec).atZone(java.time.ZoneOffset.UTC).getDayOfWeek();
+                if (dow == java.time.DayOfWeek.SATURDAY || dow == java.time.DayOfWeek.SUNDAY) continue;
                 Bar b = new Bar();
-                b.timestamp = ts.get(i).asLong();
+                b.timestamp = tsec;
                 b.open  = num(openA, i);
                 b.high  = num(highA, i);
                 b.low   = num(lowA, i);
