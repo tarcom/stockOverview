@@ -69,8 +69,9 @@ echo "Precompute: $total aktier" . ($LIMIT ? " (limit)" : "") . ", " . count($sp
 $priceCutoff = date('Y-m-d', strtotime('-11 years'));
 $priceStmt = $pdo->prepare("SELECT price_date, COALESCE(adj_close, close) p FROM " . t('prices')
     . " WHERE symbol=? AND price_date >= ? AND COALESCE(adj_close, close) IS NOT NULL ORDER BY price_date");
-$firstStmt = $pdo->prepare("SELECT MIN(price_date) FROM " . t('prices')
-    . " WHERE symbol=? AND COALESCE(adj_close, close) IS NOT NULL");
+// Uden COALESCE-betingelse → rent index-min (PK (symbol,price_date)), øjeblikkeligt.
+// Første række har altid en kurs, så first_date er korrekt uanset.
+$firstStmt = $pdo->prepare("SELECT MIN(price_date) FROM " . t('prices') . " WHERE symbol=?");
 $fundCols = implode(',', $FUND);
 $fundStmt = $pdo->prepare("SELECT $fundCols, market_cap, snapshot_date FROM " . t('fundamentals')
     . " WHERE symbol=? ORDER BY snapshot_date DESC LIMIT 1");
