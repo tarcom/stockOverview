@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Data-ingestion til screener-databasen. For hvert symbol:
- *   1) kurser via v8/chart  — fuld backfill af HELE historikken (range=max) første gang,
+ *   1) kurser via v8/chart  — fuld backfill af HELE historikken (period1=0) første gang,
  *      ellers kun nye dage (inkrementel ud fra MAX(price_date) i DB). INGEST_BACKFILL_ALL=1
  *      tvinger fuld gen-hentning af alle → stockOverview_prices/_dividends/_splits
  *   2) fundamentals via v10/quoteSummary → stockOverview_securities + _fundamentals (snapshot)
@@ -44,7 +44,7 @@ public class Ingest {
     private static volatile int total = 0;
     private static volatile long startTime = 0;
 
-    /** INGEST_BACKFILL_ALL=1: tving fuld gen-hentning af HELE historikken (range=max) for
+    /** INGEST_BACKFILL_ALL=1: tving fuld gen-hentning af HELE historikken (period1=0) for
      *  alle symboler — også dem der allerede har data. Brug det én gang til at hente
      *  historik længere tilbage end de 10 år der tidligere blev gemt. Implicerer FORCE. */
     private static final boolean BACKFILL_ALL = "1".equals(System.getenv("INGEST_BACKFILL_ALL"));
@@ -74,7 +74,7 @@ public class Ingest {
                 // overskriver 'backfilled' → 'ok'.)
                 Set<String> done = StockDb.loadBackfilled(conn);
                 skip.addAll(done);
-                System.out.println("INGEST_BACKFILL_ALL=1: fuld gen-hentning (range=max). Springer "
+                System.out.println("INGEST_BACKFILL_ALL=1: fuld gen-hentning (period1=0). Springer "
                         + nf + " 'not_found' + " + done.size() + " allerede-backfillede over (genoptager).");
             } else if (force) {
                 System.out.println("INGEST_FORCE=1: springer kun " + nf + " 'not_found' over (gen-henter alt).");
@@ -119,7 +119,7 @@ public class Ingest {
     private static void ingestOne(String symbol) {
         try (Connection conn = StockDb.getConnection()) {
             LocalDate last = StockDb.getLastPriceDate(conn, symbol);
-            Long period1 = null; // null => fuld backfill (range=max)
+            Long period1 = null; // null => fuld backfill (period1=0)
             if (last != null && !BACKFILL_ALL) {
                 // re-hent et lille overlap for at fange korrektioner
                 period1 = last.minusDays(4).atStartOfDay(ZoneOffset.UTC).toEpochSecond();
