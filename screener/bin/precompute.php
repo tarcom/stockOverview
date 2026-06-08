@@ -62,8 +62,15 @@ $symbols = $pdo->query($sql)->fetchAll();
 $total = count($symbols);
 echo "Precompute: $total aktier" . ($LIMIT ? " (limit)" : "") . ", " . count($spx) . " SPX-punkter.\n";
 
+// Optimering: metric-vinduer er ≤10 år, så vi læser kun de seneste ~11 år kurser (i st.f.
+// hele den dybe historik på op til 60+ år). Den sande tidligste dato til history_years/
+// first_date hentes separat med et billigt MIN() (PK-seek). Graferne er upåvirkede —
+// de læser kurs-tabellen direkte.
+$priceCutoff = date('Y-m-d', strtotime('-11 years'));
 $priceStmt = $pdo->prepare("SELECT price_date, COALESCE(adj_close, close) p FROM " . t('prices')
-    . " WHERE symbol=? AND COALESCE(adj_close, close) IS NOT NULL ORDER BY price_date");
+    . " WHERE symbol=? AND price_date >= ? AND COALESCE(adj_close, close) IS NOT NULL ORDER BY price_date");
+$firstStmt = $pdo->prepare("SELECT MIN(price_date) FROM " . t('prices')
+    . " WHERE symbol=? AND COALESCE(adj_close, close) IS NOT NULL");
 $fundCols = implode(',', $FUND);
 $fundStmt = $pdo->prepare("SELECT $fundCols, market_cap, snapshot_date FROM " . t('fundamentals')
     . " WHERE symbol=? ORDER BY snapshot_date DESC LIMIT 1");
@@ -71,12 +78,14 @@ $fundStmt = $pdo->prepare("SELECT $fundCols, market_cap, snapshot_date FROM " . 
 $done = 0; $withMetrics = 0; $t0 = microtime(true);
 foreach ($symbols as $sec) {
     $sym = $sec['symbol'];
-    $priceStmt->execute([$sym]);
-    $series = $priceStmt->fetchAll(); // [['price_date'=>...,'p'=>...], ...] ascending
+    $priceStmt->execute([$sym, $priceCutoff]);
+    $series = $priceStmt->fetchAll(); // seneste ~11 år, ascending
+    $firstStmt->execute([$sym]);
+    $trueFirst = $firstStmt->fetchColumn() ?: null; // sand tidligste dato (hele historikken)
     $fundStmt->execute([$sym]);
     $fund = $fundStmt->fetch() ?: [];
 
-    $row = buildRow($sym, $sec, $series, $fund, $spx, $fx, $WINDOWS, $METRICS, $FUND);
+    $row = buildRow($sym, $sec, $series, $trueFirst, $fund, $spx, $fx, $WINDOWS, $METRICS, $FUND);
     if ($row['_hasMetrics']) $withMetrics++;
     unset($row['_hasMetrics']);
     upsert($pdo, t('screener'), $row, ['symbol']);
@@ -103,7 +112,7 @@ printf("Facet-cache bygget på %.1fs.\n", microtime(true) - $tf);
 
 // =====================================================================
 
-function buildRow($sym, $sec, $series, $fund, $spx, $fx, $WINDOWS, $METRICS, $FUND): array {
+function buildRow($sym, $sec, $series, $trueFirst, $fund, $spx, $fx, $WINDOWS, $METRICS, $FUND): array {
     $row = ['symbol'=>$sym, 'name'=>$sec['name'], 'exchange'=>$sec['exchange'],
         'currency'=>$sec['currency'], 'quote_type'=>$sec['quote_type'], 'sector'=>$sec['sector'],
         'industry'=>$sec['industry'], 'country'=>$sec['country'],
@@ -112,10 +121,12 @@ function buildRow($sym, $sec, $series, $fund, $spx, $fx, $WINDOWS, $METRICS, $FU
 
     $n = count($series);
     if ($n > 0) {
-        $row['first_date'] = $series[0]['price_date'];
+        // first_date = sand tidligste (dyb historik); resten fra det læste ~11-års vindue.
+        $first = $trueFirst ?: $series[0]['price_date'];
+        $row['first_date'] = $first;
         $row['last_date']  = $series[$n-1]['price_date'];
         $row['last_close'] = (float)$series[$n-1]['p'];
-        $days = (strtotime($series[$n-1]['price_date']) - strtotime($series[0]['price_date'])) / 86400;
+        $days = (strtotime($series[$n-1]['price_date']) - strtotime($first)) / 86400;
         $row['history_days']  = (int)round($days);
         $row['history_years'] = round($days / 365.25, 2);
         // Datakvalitets-signal: største absolutte 1-dags bevægelse over HELE historikken.
