@@ -1216,11 +1216,11 @@ function baseOpts(yTitle, xmin, xmax) {
 
 // ---- indikator-matematik ----
 function sma(a, p) { const o = Array(a.length).fill(null); let s = 0; for (let i = 0; i < a.length; i++) { s += a[i]; if (i >= p) s -= a[i-p]; if (i >= p-1) o[i] = s/p; } return o; }
+// EMA seedet med FØRSTE værdi (i st.f. at vente på p punkter), så MACD fylder hele
+// bredden som RSI — de tidligste ~p punkter er let upræcise mens EMA'en konvergerer.
 function ema(a, p) { const o = Array(a.length).fill(null); const k = 2/(p+1); let prev = null;
   for (let i = 0; i < a.length; i++) { if (a[i] == null) continue;
-    if (prev == null) { let s = 0, c = 0; for (let j = Math.max(0,i-p+1); j <= i; j++) if (a[j] != null) { s += a[j]; c++; }
-      if (c >= p) { prev = s/c; o[i] = prev; } }
-    else { prev = a[i]*k + prev*(1-k); o[i] = prev; } }
+    prev = (prev == null) ? a[i] : a[i]*k + prev*(1-k); o[i] = prev; }
   return o; }
 function rsi(a, p) { const o = Array(a.length).fill(null); let g = 0, l = 0;
   for (let i = 1; i < a.length; i++) { const ch = a[i]-a[i-1], gg = Math.max(0,ch), ll = Math.max(0,-ch);
