@@ -9,3 +9,4 @@ config/config.php
 # aogj-migrering: secrets (kun FTP-deployet)
 deploy/ingest.php
 deploy/push-config.php
+deploy/config.aogj.php

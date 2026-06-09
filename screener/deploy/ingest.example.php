@@ -4,27 +4,24 @@
  * Modtager token-beskyttede JSON-batches fra HTPC og UPSERTer til aogj_com-DB'en.
  * GITIGNORED — indeholder DB-creds. Deployes kun via FTP, committes ALDRIG.
  *
- * POST JSON: { token, action, table, columns, rows }
- *   action=ping   -> sundhedstjek
- *   action=ddl    -> opret tabel (whitelistet schema)
- *   action=count  -> COUNT(*)  (action=approx -> information_schema-estimat)
- *   action=insert -> bulk UPSERT af rows (default)
+ * POST JSON: { token, action, table, create_sql, columns, rows }
+ *   action=ping     -> sundhedstjek (+ php/mysql-version)
+ *   action=ddl      -> opret tabel (klient sender CREATE TABLE; tabelnavn whitelistes)
+ *   action=truncate -> tøm tabel (til ren gen-push)
+ *   action=count    -> COUNT(*)   (action=approx -> information_schema-estimat)
+ *   action=insert   -> bulk UPSERT af rows (default)
  */
 header('Content-Type: application/json; charset=utf-8');
 
 $TOKEN = 'DIT_HEMMELIGE_TOKEN';
 $DB = ['host' => 'aogj.com.mysql', 'name' => 'aogj_com', 'user' => 'aogj_com', 'pass' => 'DIT_DB_PASSWORD'];
 
-// Whitelist: tabel => tilladte kolonner
+// Whitelist: tilladte tabel-navne. Skemaet sendes af pusheren (SHOW CREATE TABLE) og
+// valideres mod dette navn; insert-kolonner valideres dynamisk mod den faktiske tabel.
 $ALLOWED = [
-  'stockOverview_prices' => ['symbol','price_date','open','high','low','close','adj_close','volume'],
-];
-$DDL = [
-  'stockOverview_prices' => "CREATE TABLE IF NOT EXISTS stockOverview_prices (
-     symbol VARCHAR(40) NOT NULL, price_date DATE NOT NULL,
-     open DOUBLE NULL, high DOUBLE NULL, low DOUBLE NULL, close DOUBLE NULL,
-     adj_close DOUBLE NULL, volume BIGINT NULL,
-     PRIMARY KEY (symbol, price_date)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+    'stockOverview_prices', 'stockOverview_screener', 'stockOverview_securities',
+    'stockOverview_indexes', 'stockOverview_fx', 'stockOverview_cache',
+    'stockOverview_userdata', 'stockOverview_ingest_log', 'stockOverview_runs',
 ];
 
 $in = json_decode(file_get_contents('php://input'), true);
@@ -38,14 +35,38 @@ try {
         $DB['user'], $DB['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 } catch (Throwable $e) { http_response_code(500); echo json_encode(['error' => 'db: ' . $e->getMessage()]); exit; }
 
-if ($action === 'ping') { echo json_encode(['ok' => true, 'php' => PHP_VERSION]); exit; }
+if ($action === 'ping') {
+    $mysql = '';
+    try { $mysql = (string)$pdo->query('SELECT VERSION()')->fetchColumn(); } catch (Throwable $e) {}
+    echo json_encode(['ok' => true, 'php' => PHP_VERSION, 'mysql' => $mysql]); exit;
+}
 
 $table = $in['table'] ?? '';
-if (!isset($ALLOWED[$table])) { http_response_code(400); echo json_encode(['error' => 'table not allowed']); exit; }
+if (!in_array($table, $ALLOWED, true)) { http_response_code(400); echo json_encode(['error' => 'table not allowed']); exit; }
+
+/** Faktiske kolonner i en tabel (til validering af insert-kolonner). */
+function table_columns(PDO $pdo, string $table): array {
+    $st = $pdo->prepare("SELECT column_name FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = ?");
+    $st->execute([$table]);
+    return $st->fetchAll(PDO::FETCH_COLUMN);
+}
 
 try {
-    if ($action === 'ddl')   { $pdo->exec($DDL[$table]); echo json_encode(['ok' => true, 'ddl' => $table]); exit; }
-    if ($action === 'count') { echo json_encode(['count' => (int)$pdo->query("SELECT COUNT(*) FROM `$table`")->fetchColumn()]); exit; }
+    if ($action === 'ddl') {
+        $sql = (string)($in['create_sql'] ?? '');
+        // Skal være CREATE TABLE for præcis den whitelistede tabel.
+        if (!preg_match('/^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?' . preg_quote($table, '/') . '`?\s*\(/i', $sql)) {
+            http_response_code(400); echo json_encode(['error' => 'ddl mismatch']); exit;
+        }
+        // Gør idempotent + MySQL-portabel (MariaDB-SHOW CREATE bruger current_timestamp()).
+        $sql = preg_replace('/^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?/i', 'CREATE TABLE IF NOT EXISTS ', $sql, 1);
+        $sql = str_ireplace('current_timestamp()', 'CURRENT_TIMESTAMP', $sql);
+        $pdo->exec($sql);
+        echo json_encode(['ok' => true, 'ddl' => $table]); exit;
+    }
+    if ($action === 'truncate') { $pdo->exec("TRUNCATE TABLE `$table`"); echo json_encode(['ok' => true, 'truncated' => $table]); exit; }
+    if ($action === 'count')    { echo json_encode(['count' => (int)$pdo->query("SELECT COUNT(*) FROM `$table`")->fetchColumn()]); exit; }
     if ($action === 'approx') {
         $st = $pdo->prepare("SELECT table_rows FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?");
         $st->execute([$table]); echo json_encode(['approx' => (int)$st->fetchColumn()]); exit;
@@ -54,7 +75,8 @@ try {
     // insert (bulk UPSERT)
     $cols = $in['columns'] ?? []; $rows = $in['rows'] ?? [];
     if (!$cols || !is_array($rows) || !$rows) { echo json_encode(['ok' => true, 'inserted' => 0]); exit; }
-    foreach ($cols as $c) if (!in_array($c, $ALLOWED[$table], true)) {
+    $valid = table_columns($pdo, $table);
+    foreach ($cols as $c) if (!in_array($c, $valid, true)) {
         http_response_code(400); echo json_encode(['error' => "bad column: $c"]); exit;
     }
     $colList = implode(',', array_map(fn($c) => "`$c`", $cols));

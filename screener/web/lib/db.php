@@ -6,8 +6,13 @@
 function cfg(): array {
     static $cfg = null;
     if ($cfg === null) {
-        $path = __DIR__ . '/../../config/config.php';
-        if (!is_file($path)) {
+        // Lokalt repo-layout: screener/config/config.php (fra web/lib → ../../config).
+        // aogj-layout: web/ er deployet som /screener/, config i /screener/config (../config).
+        $path = null;
+        foreach ([__DIR__ . '/../../config/config.php', __DIR__ . '/../config/config.php'] as $cand) {
+            if (is_file($cand)) { $path = $cand; break; }
+        }
+        if ($path === null) {
             fwrite(STDERR, "Mangler config/config.php (kopiér config/config.example.php)\n");
             exit(1);
         }

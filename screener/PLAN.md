@@ -62,7 +62,40 @@ Plus datakvalitet: `history_years`, `max_day_move` (luger korrupt Yahoo-data fra
   - [x] Multi-sammenligning dækkes af overlay base-100-grafen (de viste aktier på én graf)
   - [ ] (Polish-backlog) vælg specifikke rækker til sammenligning; aktiv-filter-chips
 
-## Fase 5 — aogj.com-migration (PLANLAGT, scaffolding på plads)
+## Fase 5 — aogj.com-migration (✅ GENNEMFØRT 2026-06-09; prices-backfill kører)
+
+Portalen er **live offentligt** på **https://aogj.com/screener/screener.php** (PHP 8.5.6 +
+MariaDB 10.11.16 på one.com). Web-filer + alle små tabeller er migreret; filtrering, dashboard,
+facetter, presets og CSV virker. Den fulde `prices`-backfill (option A — hele historikken,
+260M rækker, ~24,7 GB) blev startet 2026-06-09 og kører i baggrunden (~21-24k rk/s, ETA ~3,5t,
+log: `screener/logs/push_prices.log`) — graferne (kursoverlay + enkelt-aktie TA) bliver fulde
+når den er færdig.
+
+**Sådan blev det gjort (faktisk implementering):**
+- `deploy/ingest.php` (modtager) generaliseret: whitelist på **tabel-NAVNE** (prices, screener,
+  securities, indexes, fx, cache, userdata, ingest_log, runs); skemaet sendes af pusheren
+  (`SHOW CREATE TABLE`), normaliseres (`current_timestamp()`→`CURRENT_TIMESTAMP`) + gøres
+  idempotent; insert-kolonner valideres dynamisk mod den faktiske tabel. Nye actions: `truncate`,
+  og `ping` returnerer nu php+mysql-version.
+- `bin/push_to_aogj.php` generaliseret: virker for enhver `stockOverview_*`-tabel, udleder
+  kolonner automatisk, **UBUFFERET** streaming (kritisk for 260M prices → ingen OOM), sender DDL
+  selv. Env-knapper: `PUSH_SINCE=YYYY-MM-DD` (nyere historik), `PUSH_FROM_SYMBOL` (resume,
+  keyset på PK), `PUSH_NO_DDL=1`.
+- `web/lib/db.php`: config-sti prøver nu både repo-layout (`../../config`) og aogj-layout
+  (`../config`) → web deployes som `/screener/` med config i `/screener/config/config.php`.
+- aogj-config: `deploy/config.aogj.php` (gitignored) → FTP'et til `/screener/config/config.php`
+  (peger på aogj's egen MySQL `aogj_com`).
+- Deploy: direkte FTPS fra HTPC via `curl --ssl-reqd` med CarCrawler2's `.ftp-credentials`
+  (`ftp.aogj.com`). Ingen GitHub Actions-workflow nødvendig.
+- Daglig delta-sync tilføjet til `daily_update.sh` (trin 3): re-push af screener/securities/
+  facetter/status + nye prices (`PUSH_SINCE=7 dage`) efter nat-precompute.
+- **Sprunget over** (web rører dem ikke): `fundamentals` (3,7 GB), `dividends`, `splits`,
+  `symbols`. TA-modalens fundamentals kommer fra `screener`-tabellen + `securities.business_summary`.
+- `PLAN.md` deployes **ikke** til aogj (nævner Yahoo) → plan-siden renderer tomt kort offentligt.
+
+---
+
+### Oprindelig plan (bevaret som reference)
 
 Flyt portalen fra HTPC til **one.com/aogj.com** så den er offentligt tilgængelig.
 
