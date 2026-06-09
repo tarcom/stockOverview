@@ -237,8 +237,11 @@ Al datahentning går gennem `dk.stockAnalyzer.YahooClient` (ren Java, `HttpURLCo
    evt. opdateres/udvides fra: **US:** `ftp://ftp.nasdaqtrader.com/SymbolDirectory/`;
    **globalt:** Yahoos uofficielle screener-endpoint; **Norden:** `nasdaqomxnordic.com/aktier`.
 7. **aogj.com-migration** — flyt screener-web-portalen til one.com (PHP+MySQL). HTPC forbliver
-   compute-motor og pusher data via chunked JSON POST. Husk også `_screener`, `_cache`,
-   `_userdata`, `_indexes`, `_fx`-tabellerne.
+   compute-motor og pusher tabeller via chunked JSON POST → token-modtager
+   `aogj.com/screener/ingest.php` (LIVE; kender pt. kun `prices` — PoC). **Detaljeret plan +
+   status + den store `prices`-beslutning (24,7 GB: fuld vs nyere) i `screener/PLAN.md` (Fase 5).**
+   Scaffolding: `screener/bin/push_to_aogj.php`, `screener/deploy/ingest.php` + `push-config.php`
+   (begge gitignored — aogj-creds/token). Deploy af web-filer: GitHub Actions/FTPS som `stocks`.
 
 ---
 

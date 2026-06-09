@@ -62,6 +62,56 @@ Plus datakvalitet: `history_years`, `max_day_move` (luger korrupt Yahoo-data fra
   - [x] Multi-sammenligning dækkes af overlay base-100-grafen (de viste aktier på én graf)
   - [ ] (Polish-backlog) vælg specifikke rækker til sammenligning; aktiv-filter-chips
 
+## Fase 5 — aogj.com-migration (PLANLAGT, scaffolding på plads)
+
+Flyt portalen fra HTPC til **one.com/aogj.com** så den er offentligt tilgængelig.
+
+**Arkitektur (besluttet):** HTPC forbliver **compute-motoren** (Java-ingest + `precompute.php`
+bygger tabellerne i MariaDB). one.com tillader **IKKE** remote MySQL, så HTPC **pusher**
+tabeller op via **chunked JSON POST** → en token-beskyttet modtager på aogj, der UPSERTer til
+aogj-DB'en. aogj kører så portalen **standalone** (PHP 8.5 + egen MySQL).
+
+```
+HTPC: MariaDB  → bin/push_to_aogj.php (chunked JSON POST, batch ~25k rækker)
+                      ↓ HTTPS + token
+aogj: screener/ingest.php (modtager, whitelistet DDL + bulk UPSERT) → aogj-MySQL
+aogj: screener/web/ (PHP-portal, læser aogj-MySQL)  ← brugeren
+```
+
+**Scaffolding (findes):**
+- `bin/push_to_aogj.php` — streamer en tabel op i batches (ping → ddl → insert), måler tempo.
+- `deploy/ingest.php` — **modtageren** (GITIGNORED: aogj-DB-creds + token). LIVE på
+  `https://aogj.com/screener/ingest.php` (verificeret: svarer `{"ok":true,"php":"8.5.6"}`).
+  `deploy/ingest.example.php` er committet skabelon.
+- `deploy/push-config.php` — **GITIGNORED**: `{url, token}` til pusheren.
+- ⚠️ **Begge kender pt. KUN `stockOverview_prices`** (PoC, ~200k rækker pushet som test).
+
+**Tabel-størrelser (det der skal pushes):**
+| Tabel | Rækker | Størrelse | |
+|---|---|---|---|
+| `stockOverview_prices` | **260M** | **24,7 GB** | ⚠️ knasten — til grafer |
+| `stockOverview_screener` | 67k | 106 MB | kerne (filtrering) |
+| `stockOverview_securities` | 71k | 92 MB | navne/sektor/beskrivelse (TA-detalje) |
+| `_indexes` / `_fx` / `_cache` / `_userdata` | småt | <1 MB | benchmark/FX/facetter/screens |
+
+**Den store beslutning — `prices` (24,7 GB):** one.com-kvote er 50 GB.
+- **A) Push hele** → fuld dyb historik + Maks-grafer, men halvdelen af kvoten + mange-timers
+  push + tung 260M-rækkers tabel på shared hosting (risiko for one.com-grænser).
+- **B) Push kun nyere (~5-10 år)** → ~5-8 GB, hurtigt/let; Maks-grafer begrænset på aogj.
+- **Anbefaling: fasedelt** — push alt UNDTAGEN fuld prices først (filtrering+dashboard+presets
+  virker straks), tag så A-vs-B-beslutningen.
+
+**Deploy-mekanisme:** som `stocks` — **GitHub Actions → lftp/FTPS** (`ftp.aogj.com`, secret
+`FTP_PASS`). Mangler: workflow i `tarcom/stockOverview` + secret. Alternativ: direkte FTP fra
+HTPC (CarCrawler2 har `.ftp-credentials` til aogj). `deploy/ingest.php` kom op manuelt (commit `9746a2e`).
+
+**Udestående trin:**
+- [ ] Udvid push + modtager (`push_to_aogj.php` + `deploy/ingest.php`) til alle nødvendige
+  tabeller (pt. kun prices): screener, securities, indexes, fx, cache, userdata.
+- [ ] Deploy `screener/web/` til aogj (`/screener/`) + en `config.php` på aogj der peger på aogj-DB'en.
+- [ ] Push dataen (fase 1: småtabeller; fase 2: prices iht. A/B-beslutning).
+- [ ] Daglig delta-sync: efter nat-precompute pusher HTPC den opdaterede `screener` (+ nye prices) til aogj.
+
 ## TODO / backlog (bygges i mindre bidder)
 
 - [ ] Tekniske indikatorer på graferne: SMA (20/50/100/200), EMA, Bollinger, RSI, MACD i sub-pane — med mouse-over-forklaringer
