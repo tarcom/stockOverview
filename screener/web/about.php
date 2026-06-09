@@ -7,7 +7,7 @@ require __DIR__ . '/lib/filters.php';   // samme kilde som filter-tooltipsene (f
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Om &amp; metode — Nørgaard's Aktie Screener</title>
+<title>Om &amp; metode — Stock Screener Lab</title>
 <link rel="stylesheet" href="assets/style.css?v=<?= filemtime(__DIR__ . '/assets/style.css') ?>">
 </head>
 <body>
@@ -15,7 +15,7 @@ require __DIR__ . '/lib/filters.php';   // samme kilde som filter-tooltipsene (f
 
 <main class="about">
   <h1>Om &amp; metode</h1>
-  <p class="lead">Nørgaard's Aktie Screener gennemsøger ~150.000 aktier globalt og hjælper dig med at
+  <p class="lead">Stock Screener Lab gennemsøger ~76.000 aktier globalt og hjælper dig med at
   finde dem der matcher dine kriterier — med fokus på at finde <strong>stabile, vedvarende vækst-aktier</strong>.</p>
 
   <h2>Sådan bruger du den</h2>

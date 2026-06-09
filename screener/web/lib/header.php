@@ -10,13 +10,12 @@ function render_header(string $active): void { ?>
         stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="29" cy="5" r="2.8" fill="#5b8def"/>
     </svg>
-    <span class="brand-name">Nørgaard's <b>Aktie&nbsp;Screener</b></span>
+    <span class="brand-name">Stock&nbsp;Screener&nbsp;<b>Lab</b></span>
   </a>
   <nav>
     <a href="index.php"<?= $active === 'universe' ? ' class="active"' : '' ?>>Universet</a>
     <a href="screener.php"<?= $active === 'screener' ? ' class="active"' : '' ?>>Screener</a>
     <a href="about.php"<?= $active === 'about' ? ' class="active"' : '' ?>>Om</a>
-    <a href="plan.php"<?= $active === 'plan' ? ' class="active"' : '' ?>>Plan &amp; status</a>
   </nav>
 </header>
 <?php }

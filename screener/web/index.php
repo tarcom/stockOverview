@@ -17,9 +17,23 @@ if ($ready) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nørgaard's Aktie Screener — Universet</title>
+<title>Stock Screener Lab — screen verdens aktier på data</title>
 <link rel="stylesheet" href="assets/style.css?v=<?= filemtime(__DIR__ . '/assets/style.css') ?>">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  .hero-cta { text-align:center; padding:2.6rem 1rem 2.2rem; margin-bottom:1.4rem;
+    background:radial-gradient(120% 140% at 50% 0%, rgba(91,141,239,.16), transparent 70%);
+    border-bottom:1px solid rgba(255,255,255,.06); }
+  .hero-cta h1 { font-size:clamp(2rem,4.5vw,3rem); font-weight:800; letter-spacing:-.5px; margin:0 0 .5rem;
+    background:linear-gradient(90deg,#2ec4b6,#5b8def); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .hero-cta h1 b { font-weight:800; }
+  .hero-cta .hero-lead { max-width:640px; margin:0 auto 1.6rem; color:#aab3c0; line-height:1.6; font-size:1.04rem; }
+  .cta-big { display:inline-flex; align-items:center; gap:.5rem; padding:.95rem 2rem; border-radius:50px;
+    font-size:1.08rem; font-weight:700; color:#fff; background:linear-gradient(90deg,#2ec4b6,#5b8def);
+    box-shadow:0 8px 30px rgba(91,141,239,.4); transition:transform .2s, box-shadow .2s; text-decoration:none; }
+  .cta-big:hover { transform:translateY(-2px); box-shadow:0 12px 38px rgba(91,141,239,.55); }
+  .hero-sub { margin-top:1rem; font-size:.82rem; color:#7c8696; letter-spacing:.3px; }
+</style>
 </head>
 <body>
 <?php render_header('universe'); ?>
@@ -33,6 +47,13 @@ if ($ready) {
   </main>
 <?php else: ?>
 <main class="wrap" id="universe">
+
+  <section class="hero-cta">
+    <h1>Stock Screener <b>Lab</b></h1>
+    <p class="hero-lead">Filtrér, sammenlign og analysér ~76.000 aktier fra hele verden — på data, ikke på mavefornemmelse. Kvalitets-score, base-100-grafer og teknisk analyse på millisekunder.</p>
+    <a class="cta-big" href="screener.php">🔎 Åbn screeneren →</a>
+    <div class="hero-sub">Gratis · ingen login · SMA / RSI / MACD · delbare screens</div>
+  </section>
 
   <section class="kpis">
     <div class="kpi"><div class="kpi-num"><?= fmt_int($h['total']) ?></div><div class="kpi-lbl">aktier i screeneren</div></div>

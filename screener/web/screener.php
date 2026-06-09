@@ -48,7 +48,7 @@ $presets = [
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nørgaard's Aktie Screener</title>
+<title>Stock Screener Lab</title>
 <link rel="stylesheet" href="assets/style.css?v=<?= filemtime(__DIR__ . '/assets/style.css') ?>">
 <link rel="stylesheet" href="assets/screener.css?v=<?= filemtime(__DIR__ . '/assets/screener.css') ?>">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
