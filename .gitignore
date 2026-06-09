@@ -10,3 +10,7 @@ output/
 
 # DB-credentials (genbruger stocks-projektets MariaDB) — må aldrig committes
 config/db.properties
+
+# Runtime-logs (daglig cron)
+logs/
+daily_cron.log
