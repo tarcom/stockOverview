@@ -31,20 +31,13 @@ echo "[2/3] Precompute..." >> "$LOG"
 php /home/allan/stockOverview/screener/bin/precompute.php >> "$LOG" 2>&1
 echo "[2/3] Precompute exit=$?" >> "$LOG"
 
-# 3) Delta-sync til aogj.com (one.com): den genbyggede screener-tabel + facetter +
-#    status, og KUN de nye dagskurser (price_date inden for de seneste 7 dage — dækker
-#    ingestens 4-dages overlap; UPSERT er idempotent). Den fulde prices-backfill er en
-#    engangs-push, IKKE en del af cron. Springes over hvis push-config mangler.
-PUSH=/home/allan/stockOverview/screener/bin/push_to_aogj.php
-if [ -f /home/allan/stockOverview/screener/deploy/push-config.php ]; then
-    echo "[3/3] Push til aogj..." >> "$LOG"
-    for t in screener securities indexes fx ingest_log runs cache userdata; do
-        php "$PUSH" stockOverview_$t >> "$LOG" 2>&1
-    done
-    PUSH_SINCE=$(date -d '7 days ago' '+%Y-%m-%d') php "$PUSH" stockOverview_prices 25000 >> "$LOG" 2>&1
-    echo "[3/3] Push exit=$?" >> "$LOG"
-else
-    echo "[3/3] Push sprunget over (ingen deploy/push-config.php)" >> "$LOG"
-fi
+# 3) Delta-sync til simply.com (den LIVE screener bor nu på screener.ans-consulting.dk):
+#    genbygget screener-tabel + facetter + status, og KUN de nye dagskurser (seneste
+#    10 dage, REPLACE = idempotent). userdata ekskluderes (live-brugernes gemte screens).
+#    Direkte DB-til-DB via simplys eksterne MySQL-adgang. Den fulde 24 GB prices-backfill
+#    er en engangs-ting, IKKE en del af cron.
+echo "[3/3] Push til simply..." >> "$LOG"
+bash /home/allan/stockOverview/screener/bin/push_to_simply.sh >> "$LOG" 2>&1
+echo "[3/3] Push exit=$?" >> "$LOG"
 
 echo "======== DONE  $(date '+%Y-%m-%d %H:%M:%S') ========" >> "$LOG"

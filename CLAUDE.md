@@ -106,6 +106,34 @@ sammenligne på base-100-grafer, og åbne teknisk analyse (SMA/RSI/MACD/volumen)
 Logger til `logs/daily_update.log`. Tunge fuld-backfills er IKKE en del af cron — kør manuelt
 med `INGEST_BACKFILL_ALL=1`. (Ligger i crontab ved siden af CarCrawler 20:00 + stocks 22:30.)
 
+## Hosting: screeneren bor nu på simply.com (2026-06-25)
+
+Den live screener-portal er **flyttet fra one.com (aogj.com/screener) til simply.com** fordi
+prices-tabellen (24 GB / 281,6 mio. rk) sprængte one.coms 50 GB-kvote (DB tæller med i kvoten
+der). simply har **separat, ubegrænset MySQL-plads** og tillader **ekstern DB-adgang**.
+
+- **Live URL:** `screener.ans-consulting.dk` (simply Basic Suite, ans-consulting.dk → FTP-mappe
+  `/screener`; DNS-only domæner kan pege hertil senere, fx stocks-screener.com). ans-consulting.dk's
+  forside-link er opdateret hertil (NemBestil-repoet). stockscreenerlab.com → aogj.com/screener er
+  nu dødt (one.com-tabellerne droppet).
+- **DB:** dedikeret simply-DB **`ans_consulting_dk_db_screener`** på `mysql68.unoeuro.com`
+  (bruger `ans_consulting_dk`). Indeholder `stockOverview_{prices,screener,securities,indexes,fx,
+  ingest_log,runs,cache,userdata}`. **`fundamentals` (17 GB) ligger KUN på HTPC** — web-portalen
+  bruger den ikke (precompute gør, og precompute kører på HTPC).
+- **HTPC = compute-motor** (ingest + precompute mod lokal `stocks`-DB), uændret. Delt hosting kan
+  ikke køre Java-ingesten/precompute (ingen JVM, fair-use-grænser).
+- **Daglig sync** (`daily_update.sh` trin 3) bruger nu **`screener/bin/push_to_simply.sh`** —
+  direkte `mysqldump | mysql` HTPC→simply (ekstern adgang). Små tabeller: full replace; priser:
+  seneste 10 dage med `REPLACE` (idempotent). **`userdata` ekskluderes** (live-brugernes gemte
+  screens på simply må ikke overskrives). Tager ~15 min. Simply-creds i
+  `screener/deploy/simply.cnf` (gitignored). Den gamle one.com-push (`push_to_aogj.php` + HTTP
+  `ingest.php`) bruges ikke længere, men `push_to_aogj.php` har nu en `PUSH_URL`/`PUSH_TOKEN`-override.
+- **Engangs-migrering** blev gjort med `mysqldump --single-transaction | mysql` (24 GB ≈ 50 min);
+  verificeret 281.592.532 rk begge steder. Performance på Basic (0,5 GB/1 kerne) ser OK ud; flyt
+  evt. til Standard (digital-cafe.dk, 2 kerner/1 GB) hvis for sløv. one.com beholdes uændret til
+  aogj.com + mail (primær mail sender *som* allan@/jette@aogj.com → kan ikke bare bruge gratis
+  forward; se auto-memory [[hosting-migration-aogj-to-simply]]).
+
 ---
 
 ## Momentum-screener (gammel) — kør-flow

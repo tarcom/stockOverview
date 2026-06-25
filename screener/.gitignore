@@ -10,3 +10,6 @@ config/config.php
 deploy/ingest.php
 deploy/push-config.php
 deploy/config.aogj.php
+
+# simply-sync: DB-creds til push_to_simply.sh (må aldrig committes)
+deploy/*.cnf

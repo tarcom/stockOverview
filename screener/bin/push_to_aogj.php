@@ -21,7 +21,10 @@ require __DIR__ . '/../web/lib/db.php';
 ini_set('memory_limit', '1024M');
 
 $cfg = require __DIR__ . '/../deploy/push-config.php';
-$URL = $cfg['url']; $TOKEN = $cfg['token'];
+// Override så samme værktøj kan pege på en anden host (fx simply.com POC) uden at røre config:
+//   PUSH_URL=https://screener.ans-consulting.dk/ingest.php PUSH_TOKEN=xxx php bin/push_to_aogj.php ...
+$URL = getenv('PUSH_URL') ?: $cfg['url'];
+$TOKEN = getenv('PUSH_TOKEN') ?: $cfg['token'];
 
 $table = $argv[1] ?? 'stockOverview_screener';
 $BATCH = (int)($argv[2] ?? 25000);
